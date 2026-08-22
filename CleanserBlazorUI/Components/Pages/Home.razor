@@ -6270,37 +6270,45 @@
                     bc.Busregnum.Errors = new List<string>() { " Busregnum or Tinum: cannot be a Ghana card or contains 6 or more consecutive repeating characters " };
                 }
 
-                // ── All-numeric registration number ─────────────────────────────
-                // A registration number OR TIN being purely numeric (no letters --
-                // Ghana business reg numbers and TINs normally carry a letter
-                // prefix, e.g. "CS", "BN", "P") is suspicious on its own, but if
-                // the OTHER identifier is well-formed (has a letter), that's still
-                // a usable, trustworthy ID for this business -- e.g. Busregnum
-                // "12893454" alongside Tinum "P000237846" shouldn't fail just
-                // because the registration number alone looks numeric. Only flag
-                // when NEITHER field has a letter, mirroring the "both missing"
-                // logic of the blank/Ghana-card check above. Same 2019 cutoff
-                // precedent -- only enforced on recent submissions.
-                var tinumCleanedForNumericCheck = new string(
-                    (bc.Tinum.Data ?? string.Empty).Where(c => !char.IsWhiteSpace(c) && c != '-').ToArray());
-                var busregnumCleanedForNumericCheck = new string(
-                    (bc.Busregnum.Data ?? string.Empty).Where(c => !char.IsWhiteSpace(c) && c != '-').ToArray());
+            }
 
-                bool busregLooksAllNumeric = !string.IsNullOrWhiteSpace(busregnumCleanedForNumericCheck) &&
-                                              busregnumCleanedForNumericCheck.All(char.IsDigit);
-                bool tinumLooksAllNumeric  = !string.IsNullOrWhiteSpace(tinumCleanedForNumericCheck) &&
-                                              tinumCleanedForNumericCheck.All(char.IsDigit);
-                bool busregHasLetter = !string.IsNullOrWhiteSpace(busregnumCleanedForNumericCheck) && !busregLooksAllNumeric;
-                bool tinumHasLetter  = !string.IsNullOrWhiteSpace(tinumCleanedForNumericCheck) && !tinumLooksAllNumeric;
+            // ── All-numeric registration number ─────────────────────────────
+            // A registration number OR TIN being purely numeric (no letters --
+            // Ghana business reg numbers and TINs normally carry a letter
+            // prefix, e.g. "CS", "BN", "P") is suspicious on its own, but if
+            // the OTHER identifier is well-formed (has a letter), that's still
+            // a usable, trustworthy ID for this business -- e.g. Busregnum
+            // "12893454" alongside Tinum "P000237846" shouldn't fail just
+            // because the registration number alone looks numeric. Only flag
+            // when NEITHER field has a letter, mirroring the "both missing"
+            // logic of the Ghana-card check above. Same 2019 cutoff
+            // precedent -- only enforced on recent submissions.
+            //
+            // Deliberately OUTSIDE the SOLE PROPRIETORSHIP/"A" check above --
+            // this was previously nested inside it, so it only ever ran for
+            // sole proprietorships. A malformed registration number is
+            // equally suspicious for any business type, not just sole props
+            // (which get the additional, specific Ghana-card check because
+            // that's where a personal ID number is most likely to have been
+            // entered by mistake).
+            var tinumCleanedForNumericCheck = new string(
+                (bc.Tinum.Data ?? string.Empty).Where(c => !char.IsWhiteSpace(c) && c != '-').ToArray());
+            var busregnumCleanedForNumericCheck = new string(
+                (bc.Busregnum.Data ?? string.Empty).Where(c => !char.IsWhiteSpace(c) && c != '-').ToArray());
 
-                if (!busregHasLetter && !tinumHasLetter && _date.IsValidFormat && _date.TheDate.Year > 2019)
-                {
-                    if (busregLooksAllNumeric)
-                        AddCellError(bc.Busregnum, "BUSREGNUM: ALL-NUMERIC REGISTRATION NUMBER — PROVIDE A VALID REGISTRATION NUMBER (TINUM ALSO NOT A USABLE ALTERNATE ID)");
-                    if (tinumLooksAllNumeric)
-                        AddCellError(bc.Tinum, "TINUM: ALL-NUMERIC TIN — PROVIDE A VALID TIN (BUSREGNUM ALSO NOT A USABLE ALTERNATE ID)");
-                }
+            bool busregLooksAllNumeric = !string.IsNullOrWhiteSpace(busregnumCleanedForNumericCheck) &&
+                                          busregnumCleanedForNumericCheck.All(char.IsDigit);
+            bool tinumLooksAllNumeric  = !string.IsNullOrWhiteSpace(tinumCleanedForNumericCheck) &&
+                                          tinumCleanedForNumericCheck.All(char.IsDigit);
+            bool busregHasLetter = !string.IsNullOrWhiteSpace(busregnumCleanedForNumericCheck) && !busregLooksAllNumeric;
+            bool tinumHasLetter  = !string.IsNullOrWhiteSpace(tinumCleanedForNumericCheck) && !tinumLooksAllNumeric;
 
+            if (!busregHasLetter && !tinumHasLetter && _date.IsValidFormat && _date.TheDate.Year > 2019)
+            {
+                if (busregLooksAllNumeric)
+                    AddCellError(bc.Busregnum, "BUSREGNUM: ALL-NUMERIC REGISTRATION NUMBER — PROVIDE A VALID REGISTRATION NUMBER (TINUM ALSO NOT A USABLE ALTERNATE ID)");
+                if (tinumLooksAllNumeric)
+                    AddCellError(bc.Tinum, "TINUM: ALL-NUMERIC TIN — PROVIDE A VALID TIN (BUSREGNUM ALSO NOT A USABLE ALTERNATE ID)");
             }
             // "W" (non-bank) is the Business-side default placeholder, unlike
             // Individual's "P" -- checking against "P" here meant this never
