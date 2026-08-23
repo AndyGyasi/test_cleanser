@@ -2251,6 +2251,16 @@
         if (_idPlaceholders.Contains(v)) return false;
         // All-same-character check (e.g. "0000000", "9999999", "XXXXXXX")
         if (v.Distinct().Count() == 1) return false;
+        // Purely alphabetic values (no digit at all) -- e.g. "STAFF",
+        // "GHANACARD", "STUDENT" -- are category labels, not real ID
+        // numbers. A real ID always contains at least one digit. These get
+        // entered surprisingly often (usually meaning "the real ID for this
+        // person is a staff/Ghana Card/student ID", not literally the word
+        // itself), and since many unrelated people can coincidentally have
+        // the exact same label in the same column, using it as a
+        // cross-record matching key produces false "same ID, different
+        // person" conflicts between genuinely unrelated individuals.
+        if (!v.Any(char.IsDigit)) return false;
         return true;
     }
 
@@ -6783,16 +6793,50 @@
                 return true;
             }
             const string sequentialIdMsg = "ID APPEARS TO BE A SEQUENTIAL PLACEHOLDER VALUE (e.g. 123456789) — PROVIDE A VALID ID";
-            foreach (var (idField, idLabel) in new (CellDataAndStatus? field, string label)[]
+            var allIdFields = new (CellDataAndStatus? field, string label)[]
             {
                 (ic.NatIDNum, "NATIDNUM"), (ic.VotersIDNum, "VOTERSIDNUM"), (ic.DriverLicNum, "DRIVERLICNUM"),
                 (ic.PassportNum, "PASSPORTNUM"), (ic.SSNum, "SSNUM"), (ic.EzwichNum, "EZWICHNUM"), (ic.OtherIDNum, "OTHERIDNUM"),
                 (ic.TINum, "TINUM")
-            })
+            };
+            foreach (var (idField, idLabel) in allIdFields)
             {
                 if (IsSequentialPlaceholderDigits(idField?.Data))
                 {
                     AddCellError(idField, sequentialIdMsg);
+                }
+            }
+
+            // ── Alpha-only ID values (e.g. "STAFF", "GHANACARD", "STUDENT") ─────
+            // These are category labels, not real ID numbers -- a genuine ID
+            // always contains at least one digit. People often enter these
+            // meaning "the real ID for this person is a staff/Ghana Card/
+            // student ID", not literally the word itself. Flag as invalid
+            // ONLY when NONE of the 8 ID columns has a genuinely valid-
+            // looking (digit-containing) value -- if even one other column
+            // does, that's a usable ID for this person and the label
+            // elsewhere shouldn't fail the record (same "either ID is
+            // enough" precedent as the Business all-numeric check). This
+            // also matters for the cross-record "same ID, different person"
+            // check: values like these are excluded from that comparison
+            // entirely (see IsValidIDValue) since many unrelated people can
+            // coincidentally share the same label.
+            static bool IsAlphaOnlyIDValue(string? value)
+            {
+                if (string.IsNullOrWhiteSpace(value)) return false;
+                var cleaned = new string(value.Where(c => !char.IsWhiteSpace(c)).ToArray());
+                return cleaned.Length > 0 && cleaned.All(char.IsLetter);
+            }
+            bool anyIdFieldHasDigit = allIdFields.Any(f => !string.IsNullOrWhiteSpace(f.field?.Data) && f.field!.Data!.Any(char.IsDigit));
+            if (!anyIdFieldHasDigit)
+            {
+                const string alphaOnlyIdMsg = "ID APPEARS TO BE A CATEGORY LABEL (e.g. STAFF, GHANACARD, STUDENT), NOT AN ACTUAL ID NUMBER — PROVIDE A VALID ID (NO OTHER COLUMN HAS A USABLE ID EITHER)";
+                foreach (var (idField, idLabel) in allIdFields)
+                {
+                    if (IsAlphaOnlyIDValue(idField?.Data))
+                    {
+                        AddCellError(idField, alphaOnlyIdMsg);
+                    }
                 }
             }
 
