@@ -1974,18 +1974,35 @@
             return true;
         }
 
+        // Values like "0000", "STAFF", "VOTERS" are placeholders/category
+        // labels, not real registration numbers or TINs -- mirrors the
+        // Individual-side IsValidIDValue fix. Without this, two genuinely
+        // unrelated businesses sharing the same placeholder in the same
+        // column (very common -- "0000" especially) would be grouped
+        // together and, since their business names obviously differ, flagged
+        // as a false 'shared ID belongs to a different business' conflict.
+        bool IsValidBusinessIdValue(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var v = NormRegStrict(value);
+            if (v.Length < 5) return false;
+            if (v.Distinct().Count() == 1) return false; // all-same-character, e.g. "0000000"
+            if (!v.Any(char.IsDigit)) return false;       // alpha-only, e.g. "STAFF", "VOTERS"
+            return true;
+        }
+
         // Group by Busregnum and check for a genuinely different business
         // (by name) sharing it, or multiple TINs under it without name
         // agreement. Customer ID plurality is intentionally NOT checked here
         // -- a business having several Customer IDs is normal, not a signal.
         var busregGroups = list
-            .Where(r => r.Busregnum != null && !string.IsNullOrWhiteSpace(r.Busregnum.Data))
+            .Where(r => IsValidBusinessIdValue(r.Busregnum?.Data))
             .GroupBy(r => NormRegStrict(r.Busregnum.Data));
 
         foreach (var grp in busregGroups)
         {
             var distinctTinums = grp
-                .Where(r => r.Tinum != null && !string.IsNullOrWhiteSpace(r.Tinum.Data))
+                .Where(r => IsValidBusinessIdValue(r.Tinum?.Data))
                 .Select(r => NormRegStrict(r.Tinum.Data))
                 .Distinct()
                 .Count();
@@ -1995,7 +2012,7 @@
 
             if (tinumConflict)
             {
-                var tinList = grp.Where(r => r.Tinum != null && !string.IsNullOrWhiteSpace(r.Tinum.Data))
+                var tinList = grp.Where(r => IsValidBusinessIdValue(r.Tinum?.Data))
                     .Select(r => NormReg(r.Tinum.Data)).Distinct();
                 var msg = $"REGISTRATION NUMBER {NormReg(grp.First().Busregnum?.Data)} IS SHARED WITH MULTIPLE TINS {string.Join(", ", tinList)} — BUSINESS NAMES DON'T MATCH, VERIFY THIS IS THE SAME BUSINESS";
                 foreach (var rec in grp)
@@ -2006,13 +2023,13 @@
 
         // Group by Tinum -- mirror of the Busregnum pass above.
         var tinumGroups = list
-            .Where(r => r.Tinum != null && !string.IsNullOrWhiteSpace(r.Tinum.Data))
+            .Where(r => IsValidBusinessIdValue(r.Tinum?.Data))
             .GroupBy(r => NormRegStrict(r.Tinum.Data));
 
         foreach (var grp in tinumGroups)
         {
             var distinctBusregnums = grp
-                .Where(r => r.Busregnum != null && !string.IsNullOrWhiteSpace(r.Busregnum.Data))
+                .Where(r => IsValidBusinessIdValue(r.Busregnum?.Data))
                 .Select(r => NormRegStrict(r.Busregnum.Data))
                 .Distinct()
                 .Count();
@@ -2022,7 +2039,7 @@
 
             if (busregConflict)
             {
-                var regList = grp.Where(r => r.Busregnum != null && !string.IsNullOrWhiteSpace(r.Busregnum.Data))
+                var regList = grp.Where(r => IsValidBusinessIdValue(r.Busregnum?.Data))
                     .Select(r => NormReg(r.Busregnum.Data)).Distinct();
                 var msg = $"TIN {NormReg(grp.First().Tinum?.Data)} IS SHARED WITH MULTIPLE REGISTRATION NUMBERS {string.Join(", ", regList)} — BUSINESS NAMES DON'T MATCH, VERIFY THIS IS THE SAME BUSINESS";
                 foreach (var rec in grp)
@@ -6319,6 +6336,30 @@
                     AddCellError(bc.Busregnum, "BUSREGNUM: ALL-NUMERIC REGISTRATION NUMBER — PROVIDE A VALID REGISTRATION NUMBER (TINUM ALSO NOT A USABLE ALTERNATE ID)");
                 if (tinumLooksAllNumeric)
                     AddCellError(bc.Tinum, "TINUM: ALL-NUMERIC TIN — PROVIDE A VALID TIN (BUSREGNUM ALSO NOT A USABLE ALTERNATE ID)");
+            }
+
+            // ── Alpha-only / placeholder values (e.g. "STAFF", "VOTERS", "0000") ──
+            // Mirrors the Individual-side fix for the same problem: a value
+            // with no digit at all, or one made of a single repeated
+            // character, is a category label or placeholder, not a real
+            // registration number or TIN. Flag only when NEITHER field is a
+            // genuinely usable ID -- if the other field is fine, that's a
+            // usable ID for this business and the placeholder elsewhere
+            // shouldn't fail the record (same "either ID is enough"
+            // precedent as the all-numeric check just above).
+            bool busregIsPlaceholder = !string.IsNullOrWhiteSpace(busregnumCleanedForNumericCheck) &&
+                (busregnumCleanedForNumericCheck.Distinct().Count() == 1 || !busregnumCleanedForNumericCheck.Any(char.IsDigit));
+            bool tinumIsPlaceholder = !string.IsNullOrWhiteSpace(tinumCleanedForNumericCheck) &&
+                (tinumCleanedForNumericCheck.Distinct().Count() == 1 || !tinumCleanedForNumericCheck.Any(char.IsDigit));
+            bool busregIsUsable = !string.IsNullOrWhiteSpace(busregnumCleanedForNumericCheck) && !busregIsPlaceholder;
+            bool tinumIsUsable = !string.IsNullOrWhiteSpace(tinumCleanedForNumericCheck) && !tinumIsPlaceholder;
+
+            if (!busregIsUsable && !tinumIsUsable)
+            {
+                if (busregIsPlaceholder)
+                    AddCellError(bc.Busregnum, "BUSREGNUM APPEARS TO BE A PLACEHOLDER OR CATEGORY LABEL, NOT AN ACTUAL REGISTRATION NUMBER — PROVIDE A VALID REGISTRATION NUMBER (TINUM ALSO NOT A USABLE ALTERNATE ID)");
+                if (tinumIsPlaceholder)
+                    AddCellError(bc.Tinum, "TINUM APPEARS TO BE A PLACEHOLDER OR CATEGORY LABEL, NOT AN ACTUAL TIN — PROVIDE A VALID TIN (BUSREGNUM ALSO NOT A USABLE ALTERNATE ID)");
             }
             // "W" (non-bank) is the Business-side default placeholder, unlike
             // Individual's "P" -- checking against "P" here meant this never
