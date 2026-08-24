@@ -679,9 +679,28 @@ public class StringHelper
         var _data_amtInArrears_Amt = ValidateDecimalInput(_data_amtInArrears.Data);
         var _data_writtenOffAmount_Amt = ValidateDecimalInput(_data_writtenOffAmount.Data);
 
-        if (IsEmptyData(currentBalance)) { currentBalance = string.Empty; } else { currentBalance = _data_currentBalance_Amt.Value.ToString(); }
-        if (IsEmptyData(amtInArrears)) { amtInArrears = string.Empty; } else { amtInArrears = _data_amtInArrears_Amt.Value.ToString(); }
-        if (IsEmptyData(writtenOffAmount)) { writtenOffAmount = string.Empty; } else { writtenOffAmount = _data_writtenOffAmount_Amt.Value.ToString(); }
+        if (IsEmptyData(currentBalance)) { currentBalance = string.Empty; }
+        else if (_data_currentBalance_Amt.IsValid) { currentBalance = _data_currentBalance_Amt.Value.ToString(); }
+        else
+        {
+            // Previously fell through to _data_currentBalance_Amt.Value.ToString()
+            // unconditionally -- ValidateDecimalInput returns (0m, false) on any
+            // parse failure, so a genuinely non-empty, non-zero balance that
+            // failed to parse for any reason was silently turned into "0" here.
+            // That corrupted financial data outright, and specifically could
+            // make a closed/paid-up/settled facility's real non-zero balance
+            // look like a valid zero balance downstream (C_Finantial), passing
+            // a record to Clean that should have failed. Preserve the cleaned-
+            // but-unparsed value instead of silently discarding it -- financial
+            // values are never altered by this cleaning step, only validated.
+            currentBalance = _data_currentBalance.Data;
+        }
+        if (IsEmptyData(amtInArrears)) { amtInArrears = string.Empty; }
+        else if (_data_amtInArrears_Amt.IsValid) { amtInArrears = _data_amtInArrears_Amt.Value.ToString(); }
+        else { amtInArrears = _data_amtInArrears.Data; }
+        if (IsEmptyData(writtenOffAmount)) { writtenOffAmount = string.Empty; }
+        else if (_data_writtenOffAmount_Amt.IsValid) { writtenOffAmount = _data_writtenOffAmount_Amt.Value.ToString(); }
+        else { writtenOffAmount = _data_writtenOffAmount.Data; }
 
         int _numbe_dia = 0;
         int.TryParse(nDIA, out _numbe_dia);

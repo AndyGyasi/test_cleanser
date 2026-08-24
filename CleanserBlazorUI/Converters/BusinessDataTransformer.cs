@@ -530,7 +530,16 @@ public class BusinessDataTransformer
         else if (data == "129" || data == "MACHINERY" || data == "P") { data = "P"; }
         else
         {
-            data = "P";
+            // Genuinely blank, or a value that matches none of the known
+            // codes above -- per spec, both cases are treated as "blank"
+            // and resolved to the bank/non-bank code (W/X) once the
+            // subscriber's type is known. This transformer is a pure,
+            // synchronous string function with no access to that context
+            // (it's determined later, from an async DB lookup), so "W" is
+            // used here as an unambiguous sentinel -- never used as an
+            // input or output anywhere in the mapping above -- for the
+            // caller to resolve into the real W/X value.
+            data = "W";
         }
         cellData.Data = data;
         return cellData;
