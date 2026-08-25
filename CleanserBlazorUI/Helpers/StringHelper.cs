@@ -718,45 +718,48 @@ public class StringHelper
         }
         fcode = fcode.ToUpper();
 
-        //active with balances
-
-        if (fcode == "A" || fcode == "ACTIVE")
+        //active with balances -- blank fcode is treated the same as
+        //explicit "A" (Active), per spec.
+        if (fcode == "A" || fcode == "ACTIVE" || string.IsNullOrWhiteSpace(fcode))
         {
+            // The only time Active (or blank, treated as Active) legitimately
+            // becomes Closed is when every one of the four balance-related
+            // fields is genuinely zero/blank -- a facility with zero balance,
+            // zero arrears, zero written-off amount, and zero NDIA is
+            // effectively closed regardless of what status was submitted (or
+            // left blank).
+            if (C_Finantial(currentBalance, amtInArrears, writtenOffAmount, nDIA))
+            {
+                curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[0].Passed = true;
+                curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[0].Data = "0";
+                curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[1].Data = "0";
+                curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[2].Data = "0";
+                curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[3].Data = "0";
+                curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[4].Data = "C";
+                return curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5;
+            }
+
+            // Otherwise, an Active (or blank) facility must have a genuine,
+            // non-zero balance -- a zero/blank current balance on an active
+            // loan is itself invalid, not something to silently pass through.
             if (!IsEmptyDataChargeOff(currentBalance) && _data_currentBalance_Amt.Value > 0)
             {
                 curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[0].Passed = true;
                 curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[4].Data = string.Empty;
-                curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[0].Data = _data_currentBalance_Amt.Value.ToString(); ;
+                curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[0].Data = _data_currentBalance_Amt.Value.ToString();
                 curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[1].Data = _data_amtInArrears_Amt.Value.ToString();
                 curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[5].Data = string.Empty;
-                var ttt = curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5;
                 return curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5;
             }
-        }
 
-        //C P T without code
-        if (C_Finantial(currentBalance, amtInArrears, writtenOffAmount, nDIA) && string.IsNullOrWhiteSpace(fcode))
-        {
-            fcode = "C";
-            currentBalance = "0";
-            amtInArrears = "0";
-            nDIA = "0";
-            writtenOffAmount = "0";
-        }
-
-
-        //Without any fcode 
-        if (_data_amtInArrears_Amt.IsValid && _data_currentBalance_Amt.IsValid && IsEmptyData(fcode) && IsEmptyData(writtenOffAmount))
-        {
-            curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[0].Passed = true;
-            curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[0].Data = _data_currentBalance_Amt.Value.ToString();
-            curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[1].Data = _data_amtInArrears_Amt.Value.ToString();
-            curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[5].Data = string.Empty;
+            // Neither condition met: the four fields aren't all zero (so this
+            // isn't a legitimate Closed conversion), yet the current balance
+            // is zero/blank despite the facility being Active -- fail
+            // explicitly instead of falling through to a looser check.
+            curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[0].Passed = false;
+            curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5[0].Errors = new List<string>() { " CURRENT BALANCE SHOULD NOT BE 0 OR EMPTY FOR ACTIVE LOANS " };
             return curBal0_amtInArrears1_wOffAmount2_nDIA3_fsc4_Date5;
         }
-
-
-        
 
 
         //Restructured
