@@ -4,6 +4,14 @@ namespace CleanserBlazorUI.Entities;
 public class BusinessContext
 {
     public string CustomerIDBusregnumTinumStatus { get; set; } = string.Empty;
+    /// <summary>
+    /// Set when a shared Busregnum/Tinum/CustomerID's business names only
+    /// agree via fuzzy (token/abbreviation) matching, not an exact string
+    /// match -- e.g. "ASSOCIATION INTERNATIONAL SCHOOL" vs "...SCH", or
+    /// "...SCHOOL" vs "...SCHOOL-LOAN ACCOUNT". Not a conflict (record stays
+    /// clean), but worth a note distinct from a hard error.
+    /// </summary>
+    public string? BusinessNameFuzzyMatchNote { get; set; }
     /// <summary>Set to "UNL" when the same AccNum+CustomerID appears with a
     /// different DisbursementDate elsewhere in the same submission -- exempted
     /// for overdraft facilities (CreditFacilityType == "V"), which legitimately

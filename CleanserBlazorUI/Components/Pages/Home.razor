@@ -1954,8 +1954,18 @@
         // which was the dominant cause of false-positive UNL flags here.
         // Zero names to check, or genuinely (fuzzy) different names -> can't
         // confirm -- stay conservative.
-        bool NamesConfirmSameBusiness(IEnumerable<BusinessContext> grp)
+        //
+        // Abbreviations (e.g. "SCH" for "SCHOOL", "INT'L" for
+        // "INTERNATIONAL") are expanded via the same Business Names
+        // Normalizer mappings used for keyword validation BEFORE comparing --
+        // otherwise "ASSOCIATION INTERNATIONAL SCHOOL" vs "...SCH" would fail
+        // plain token-overlap matching despite clearly being the same
+        // business. matchedViaFuzzy reports whether any pair only agreed
+        // after this fuzzy comparison (not an exact string match), so callers
+        // can surface a warning rather than treating it as a silent pass.
+        bool NamesConfirmSameBusiness(IEnumerable<BusinessContext> grp, out bool matchedViaFuzzy)
         {
+            matchedViaFuzzy = false;
             var distinctNames = grp
                 .Where(r => r.Businessname != null && !string.IsNullOrWhiteSpace(r.Businessname.Data))
                 .Select(r => NormReg(r.Businessname.Data))
@@ -1965,11 +1975,17 @@
             if (distinctNames.Count == 0) return false;
             if (distinctNames.Count == 1) return true;
 
-            for (int i = 0; i < distinctNames.Count; i++)
-                for (int j = i + 1; j < distinctNames.Count; j++)
+            var expandedNames = distinctNames.Select(n => ConvertBusinessShortFormToLongForm(n)).ToList();
+
+            for (int i = 0; i < expandedNames.Count; i++)
+                for (int j = i + 1; j < expandedNames.Count; j++)
                 {
-                    var (_, _, isSame, _) = CompareNameTokens(distinctNames[i], string.Empty, string.Empty, distinctNames[j], string.Empty, string.Empty);
+                    if (string.Equals(expandedNames[i], expandedNames[j], StringComparison.OrdinalIgnoreCase))
+                        continue; // exact match once abbreviations are expanded
+
+                    var (_, _, isSame, _) = CompareNameTokens(expandedNames[i], string.Empty, string.Empty, expandedNames[j], string.Empty, string.Empty);
                     if (!isSame) return false;
+                    matchedViaFuzzy = true;
                 }
             return true;
         }
@@ -1991,6 +2007,51 @@
             return true;
         }
 
+        void AddFuzzyWarning(IEnumerable<BusinessContext> grp, string warnMsg)
+        {
+            foreach (var rec in grp)
+                rec.BusinessNameFuzzyMatchNote = string.IsNullOrWhiteSpace(rec.BusinessNameFuzzyMatchNote)
+                    ? warnMsg : rec.BusinessNameFuzzyMatchNote + " | " + warnMsg;
+        }
+
+        // Group by Customer ID and check for a genuinely different business
+        // (by name) using the same Customer ID. A business having several
+        // Customer IDs is fine (not checked here -- see the Busregnum/Tinum
+        // passes below), but the reverse -- the SAME Customer ID linked to
+        // two clearly different businesses, e.g. "ABEIKUMAH CONSTRUCTION..."
+        // vs "ASSOCIATION INTERNATIONAL SCHOOL" -- is a real identity
+        // conflict. Fuzzy name variants (abbreviations, suffixes like
+        // "-LOAN ACCOUNT") are NOT conflicts here either.
+        var customerGroups = list
+            .Where(r => r.CustomerID != null && !string.IsNullOrEmpty(r.CustomerID.Data))
+            .GroupBy(r => NormalizeCustomerId(r.CustomerID.Data));
+
+        foreach (var grp in customerGroups)
+        {
+            var distinctNamesCount = grp
+                .Where(r => r.Businessname != null && !string.IsNullOrWhiteSpace(r.Businessname.Data))
+                .Select(r => NormReg(r.Businessname.Data))
+                .Distinct()
+                .Count();
+            if (distinctNamesCount <= 1) continue;
+
+            bool namesConfirmSame = NamesConfirmSameBusiness(grp, out bool matchedViaFuzzy);
+            var nameList = grp.Where(r => r.Businessname != null && !string.IsNullOrWhiteSpace(r.Businessname.Data))
+                .Select(r => NormReg(r.Businessname.Data)).Distinct();
+
+            if (!namesConfirmSame)
+            {
+                var msg = $"CUSTOMER ID {grp.Key} IS LINKED TO DIFFERENT BUSINESSES: {string.Join(", ", nameList)} — VERIFY WHICH IS CORRECT";
+                foreach (var rec in grp)
+                    rec.CustomerIDBusregnumTinumStatus = string.IsNullOrWhiteSpace(rec.CustomerIDBusregnumTinumStatus)
+                        ? msg : rec.CustomerIDBusregnumTinumStatus + " | " + msg;
+            }
+            else if (matchedViaFuzzy)
+            {
+                AddFuzzyWarning(grp, $"CUSTOMER ID {grp.Key}: BUSINESS NAME VARIES ACROSS RECORDS ({string.Join(", ", nameList)}) — TREATED AS THE SAME BUSINESS (FUZZY MATCH)");
+            }
+        }
+
         // Group by Busregnum and check for a genuinely different business
         // (by name) sharing it, or multiple TINs under it without name
         // agreement. Customer ID plurality is intentionally NOT checked here
@@ -2007,7 +2068,7 @@
                 .Distinct()
                 .Count();
 
-            bool namesConfirmSame = NamesConfirmSameBusiness(grp);
+            bool namesConfirmSame = NamesConfirmSameBusiness(grp, out bool matchedViaFuzzy);
             bool tinumConflict = distinctTinums > 1 && !namesConfirmSame;
 
             if (tinumConflict)
@@ -2018,6 +2079,12 @@
                 foreach (var rec in grp)
                     rec.CustomerIDBusregnumTinumStatus = string.IsNullOrWhiteSpace(rec.CustomerIDBusregnumTinumStatus)
                         ? msg : rec.CustomerIDBusregnumTinumStatus + " | " + msg;
+            }
+            else if (namesConfirmSame && matchedViaFuzzy)
+            {
+                var nameList = grp.Where(r => r.Businessname != null && !string.IsNullOrWhiteSpace(r.Businessname.Data))
+                    .Select(r => NormReg(r.Businessname.Data)).Distinct();
+                AddFuzzyWarning(grp, $"REGISTRATION NUMBER {NormReg(grp.First().Busregnum?.Data)}: BUSINESS NAME VARIES ACROSS RECORDS ({string.Join(", ", nameList)}) — TREATED AS THE SAME BUSINESS (FUZZY MATCH)");
             }
         }
 
@@ -2034,7 +2101,7 @@
                 .Distinct()
                 .Count();
 
-            bool namesConfirmSame = NamesConfirmSameBusiness(grp);
+            bool namesConfirmSame = NamesConfirmSameBusiness(grp, out bool matchedViaFuzzy);
             bool busregConflict = distinctBusregnums > 1 && !namesConfirmSame;
 
             if (busregConflict)
@@ -2045,6 +2112,12 @@
                 foreach (var rec in grp)
                     rec.CustomerIDBusregnumTinumStatus = string.IsNullOrWhiteSpace(rec.CustomerIDBusregnumTinumStatus)
                         ? msg : rec.CustomerIDBusregnumTinumStatus + " | " + msg;
+            }
+            else if (namesConfirmSame && matchedViaFuzzy)
+            {
+                var nameList = grp.Where(r => r.Businessname != null && !string.IsNullOrWhiteSpace(r.Businessname.Data))
+                    .Select(r => NormReg(r.Businessname.Data)).Distinct();
+                AddFuzzyWarning(grp, $"TIN {NormReg(grp.First().Tinum?.Data)}: BUSINESS NAME VARIES ACROSS RECORDS ({string.Join(", ", nameList)}) — TREATED AS THE SAME BUSINESS (FUZZY MATCH)");
             }
         }
 
@@ -4664,6 +4737,10 @@
                 if (typeof(T) == typeof(BusinessContext))
                 {
                     WriteHeaders(ws, wsu, wsd, wsc, SpreadSheetHeadersData.Business, 159);
+                    ws.Cell(1, 160).Value  = "--------------- Warnings ---------------";
+                    wsu.Cell(1, 160).Value = "--------------- Warnings ---------------";
+                    wsd.Cell(1, 160).Value = "--------------- Warnings ---------------";
+                    wsc.Cell(1, 160).Value = "--------------- Warnings ---------------";
                     WriteData(context.OfType<BusinessContext>().ToList(), context_duplicate.OfType<BusinessContext>().ToList(), closedRows.OfType<BusinessContext>().ToList(), ws, wsu, wsd, wsc);
                 }
                 else if (typeof(T) == typeof(IndividualContext))
@@ -5253,6 +5330,12 @@
             ws.Cell(rowIndex, 157).Value = businessRow.G4WorkTel.Data;
             ws.Cell(rowIndex, 158).Value = businessRow.G4Mobile.Data;
 
+            // Warnings column -- set once, regardless of clean/unloadable,
+            // since a warning (e.g. a fuzzy business-name match) can apply
+            // to a record that still passes clean. Mirrors the Individual
+            // side's Warnings column at 180 (Business's is at 160, right
+            // after the Errors column at 159).
+            ws.Cell(rowIndex, 160).Value = businessRow.BusinessNameFuzzyMatchNote ?? string.Empty;
 
             //=======================================END ======================================
             if (!isSlean)
