@@ -59,10 +59,16 @@ public class DataManagementService
             .Where(r => r.SubscriberCode == subscriber)
             .ToListAsync();
 
-        var existingIndex = existing.ToDictionary(
-            r => (Norm(r.CreditFacilityAccNum), Norm(r.CustomerID), Norm(r.DisbursementDate)),
-            r => r
-        );
+        // .ToDictionary() throws "An item with the same key has already been
+        // added" if the reference table has duplicate (AccNum, CustomerID,
+        // DisbursementDate) rows -- which can genuinely happen in the DB.
+        // Build the index manually instead so a duplicate just overwrites
+        // (last one wins) rather than crashing the whole cleaning run.
+        var existingIndex = new Dictionary<(string, string, string), IndividualRef>();
+        foreach (var r in existing)
+        {
+            existingIndex[(Norm(r.CreditFacilityAccNum), Norm(r.CustomerID), Norm(r.DisbursementDate))] = r;
+        }
 
         var toInsert = new List<IndividualRef>();
         var toUpdate = new List<IndividualRef>();
@@ -209,10 +215,13 @@ public class DataManagementService
             .Where(r => r.SubscriberCode == subscriber)
             .ToListAsync();
 
-        var existingIndex = existing.ToDictionary(
-            r => (Norm(r.CreditFacilityAccNum), Norm(r.CustomerID), Norm(r.DisbursementDate)),
-            r => r
-        );
+        // See matching fix on the Individual overload above -- avoids a
+        // crash on duplicate reference rows.
+        var existingIndex = new Dictionary<(string, string, string), BusinessRef>();
+        foreach (var r in existing)
+        {
+            existingIndex[(Norm(r.CreditFacilityAccNum), Norm(r.CustomerID), Norm(r.DisbursementDate))] = r;
+        }
 
         var toInsert = new List<BusinessRef>();
         var toUpdate = new List<BusinessRef>();

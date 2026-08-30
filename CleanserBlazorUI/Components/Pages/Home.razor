@@ -1745,13 +1745,17 @@
     {
         int correctDateOfBirth = 0; int dobIssues = 0; int matchdata = 0;
 
-        // Build O(1) lookup index — avoids O(n²) FirstOrDefault inside loop
-        var savedIndex = savedDatafromOurDatabase.ToDictionary(
-            r => (NormalizeAccountNumber(r.CreditFacilityAccNum),
-                  NormalizeCustomerId(r.CustomerID),
-                  r.DisbursementDate ?? string.Empty),
-            r => r
-        );
+        // Build O(1) lookup index — avoids O(n²) FirstOrDefault inside loop.
+        // Uses a manual loop rather than .ToDictionary() -- duplicate
+        // (AccNum, CustomerID, DisbursementDate) rows in the reference table
+        // would otherwise throw "An item with the same key has already been
+        // added" and crash the whole cleaning run; a duplicate just
+        // overwrites (last one wins) here instead.
+        var savedIndex = new Dictionary<(string, string, string), IndividualRef>();
+        foreach (var r in savedDatafromOurDatabase)
+        {
+            savedIndex[(NormalizeAccountNumber(r.CreditFacilityAccNum), NormalizeCustomerId(r.CustomerID), r.DisbursementDate ?? string.Empty)] = r;
+        }
 
         foreach (var clientRecord in recordFromClient)
         {
@@ -1784,13 +1788,14 @@
     {
         int correctDateOfBirth = 0; int dobIssues = 0; int matchdata = 0;
 
-        // Build O(1) lookup index
-        var savedIndex = savedDatafromOurDatabase.ToDictionary(
-            r => (NormalizeAccountNumber(r.CreditFacilityAccNum),
-                  NormalizeCustomerId(r.CustomerID),
-                  r.DisbursementDate ?? string.Empty),
-            r => r
-        );
+        // Build O(1) lookup index -- see matching fix in
+        // REF_MainMatcherTransformer_IND above for why this is a manual
+        // loop rather than .ToDictionary().
+        var savedIndex = new Dictionary<(string, string, string), BusinessRef>();
+        foreach (var r in savedDatafromOurDatabase)
+        {
+            savedIndex[(NormalizeAccountNumber(r.CreditFacilityAccNum), NormalizeCustomerId(r.CustomerID), r.DisbursementDate ?? string.Empty)] = r;
+        }
 
         foreach (var clientRecord in recordFromClient)
         {
