@@ -1,6 +1,7 @@
 {
   "ConnectionStrings": {
-    "DefaultConnection": "server=.;Persist Security Info=True;User ID=sa;Password=P@ssw0rd;Multiple Active Result Sets=False;Database=NewCleaserDB;Encrypt=True;Trust Server Certificate=True;Command Timeout=0"
+  "DefaultConnection": "Server=XDSDATAADDY;Database=NewCleaserDB;Trusted_Connection=True;Multiple Active Result Sets=True;Encrypt=True;Trust Server Certificate=True;Command Timeout=0",
+  "SubscriberConnection": "Server=XDSDATAADDY;Database=NewCleaserDB;Trusted_Connection=True;Multiple Active Result Sets=True;Encrypt=True;Trust Server Certificate=True;Command Timeout=0"
   },
   "Logging": {
     "LogLevel": {
