@@ -3781,6 +3781,11 @@
                     //SpreadSheetStatus = new();
                     using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
                     await filestream.CopyToAsync(destinationStream);
+                    // Must happen BEFORE ReadFromExcelAsync<BusinessContext> -- that call is
+                    // where each row's "W" sentinel gets resolved to isSubscriber_X_or_Y, so
+                    // it needs the correct value for THIS file already set, not a stale one
+                    // left over from whatever was processed before it.
+                    isSubscriber_X_or_Y = await DataManagementService.GetSubscribeX_or_Y(FileName);
                     var (ExcelDataRecieved, SpreadSheetStatus) = await ReadFromExcelAsync<BusinessContext>(destinationStream, FileName);
 
                     //ReadFromExcel(destinationStream, out ExcelDataRecieved, out SpreadSheetStatus);
@@ -3805,7 +3810,6 @@
                         AlertSeverityVisible = "d-block";
 
                         var RefData = await DataManagementService.GETReferenceData_BUS(filename);
-                        isSubscriber_X_or_Y = await DataManagementService.GetSubscribeX_or_Y(filename);
                         var (mainMatcherTransformer, _duplicatesInd, _correctDateOfBirth, _dobIssues, _matchdata, _newdata, _duplicateCount) = REF_MainMatcherTransformerInd_Clean_BUS(RefData, ExcelDataRecieved);
                         // Fold reference in as virtual records so Businessname/Busregnum/Tinum
                         // conflicts against history get caught by the same cross-record logic
