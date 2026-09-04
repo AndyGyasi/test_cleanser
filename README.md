@@ -109,41 +109,79 @@ All known issues, severity ratings, priority levels, and resolution status are m
 
 ---
 
-## Getting Started
+## Setting Up on a New Machine
+
+### Prerequisites
+
+- **.NET 9 SDK**
+- **SQL Server** — local instance or a reachable server (Trusted/Windows auth or SQL auth both work; see connection string below)
+- **`dotnet-ef`** global tool:
+  ```bash
+  dotnet tool install --global dotnet-ef
+  ```
+  (skip if already installed — check with `dotnet ef --version`)
+
+### Steps
 
 ```bash
 # 1. Clone
 git clone https://github.com/XAb3d/clnsr_prjct.git
 cd clnsr_prjct
 
-# 2. Restore dependencies
+# 2. Restore dependencies (restores every project in CleanserProject.sln)
 dotnet restore
 
 # 3. Configure your connection string
-#    Copy the template and fill in your SQL Server details
 cp CleanserBlazorUI/appsettings.template.json CleanserBlazorUI/appsettings.json
-#    Then edit CleanserBlazorUI/appsettings.json — set Server, Database, credentials
+#    Edit CleanserBlazorUI/appsettings.json -- set Server, Database, and auth
+#    to match your SQL Server instance. Trusted_Connection=True (Windows auth)
+#    is the default in the template; for SQL auth, replace it with
+#    User Id=...;Password=...
 
-# 4. Apply database migrations (from repo root)
+# 4. Apply all database migrations
 dotnet ef database update --project CleanserBlazorUI/CleanserBlazorUI.csproj
 
 # 5. Run
 dotnet run --project CleanserBlazorUI/CleanserBlazorUI.csproj
 ```
 
-> **Note:** `appsettings.json` is excluded from Git (contains your connection string).  
-> Always use `appsettings.template.json` as the starting point on a new machine.
+> **`appsettings.json` is excluded from Git** (it holds your connection string). Always start from `appsettings.template.json` on a new machine -- never commit your own `appsettings.json`.
 
-Requires SQL Server and .NET 9 SDK. If `dotnet ef` is not installed:
+#### What step 4 actually does
+
+`dotnet ef database update` applies **every** migration in `CleanserBlazorUI/Migrations/`, in order, against whatever database your connection string points to. EF Core tracks which migrations have already been applied (in an `__EFMigrationsHistory` table it creates), so this one command works identically whether you're pointing at:
+- a **brand-new, empty database** (it creates every table from scratch), or
+- an **existing database from an older checkout** (it applies only the migrations that are still missing).
+
+There's only one `DbContext` in the project (`ApplicationDbContext`), and it's the same `DefaultConnection` the running app reads from -- so there's no separate "reference DB" migration step to worry about; one connection string, one `dotnet ef database update`, done.
+
+For awareness, here's what's accumulated in `Migrations/` so far, oldest to newest:
+
+| When | Migration | What it added |
+|---|---|---|
+| Apr 2025 | `init4`, `clean1`, `bus1` | Initial schema |
+| Jul 2026 | `sprint5_ref_id_fields`, `sprint5_ref_id_fields_v2`, `sprint10_ref_name_fields` | Reference-matching ID/name fields |
+| Jul 28, 2026 | `AddSubscriberProfile` | `SubscriberProfile` table (Unloadable Log header dedup) |
+| Jul 29, 2026 | `AddIndividualRefMiddleNames` | Middle-name field on the individual reference-matching path |
+| Jul 30, 2026 | `AddFacilityStatusAndBusinessIdentity` | Facility status field; business identity fields |
+| Aug 2, 2026 | `AddBusinessRefTinumAndBusregnumFlag` | TIN/BusRegNum flag on the business reference-matching path |
+| Aug 5, 2026 | `AddUnloadableLogTables` | Unloadable Log tables |
+| Aug 9, 2026 | `MoveSubscriberShortCodesIntoAppDb` | Moved `SubscriberShortCodes` off the old legacy DB and into this app's own `DefaultConnection` |
+| Aug 10, 2026 | `AddLastConfirmedReportingPeriod` | Reporting-period tracking |
+| Aug 31, 2026 | `ExpandSubscriberShortCodes` | Expanded `SubscriberShortCodes` with the legacy `Subscriber` schema's remaining columns (contacts, addresses, sector code, etc.) |
+
+You don't need to run these individually or in a particular order beyond what step 4 already does automatically -- this table is just so you know what's in the DB after setup, and why.
+
+#### Verifying it worked
+
+After step 5, upload a small test file through any of the tabs (e.g. "3. INDIVIDUAL RECORDS DUD") and confirm it processes and downloads without a connection error. If it fails immediately with a SQL error, double check the `Server`/`Database` values and that the SQL Server instance is reachable from your machine (firewall, VPN, etc.).
+
+#### Optional: Aspire dashboard / telemetry
+
+`CleanserMonitor.AppHost` is a separate .NET Aspire host for observability (telemetry, health checks) -- it's **not required** to run `CleanserBlazorUI` day-to-day. If you want the dashboard:
 ```bash
-dotnet tool install --global dotnet-ef
+dotnet run --project CleanserMonitor/CleanserMonitor.AppHost
 ```
-
-> **If you're pulling an existing checkout that predates 2026-07-28:** the
-> Unloadable Log feature added a new `SubscriberProfile` table. Run
-> `dotnet ef migrations add AddSubscriberProfile --project CleanserBlazorUI`
-> then `dotnet ef database update --project CleanserBlazorUI` before running.
-> A fresh clone with all migrations already applied doesn't need this step.
 
 ---
 
