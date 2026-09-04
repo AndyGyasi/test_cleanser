@@ -17,5 +17,13 @@ public class SpreadSheetHeadersData
     {
         "Data","Correctionindicator","Facilityaccnum","CustomerID","Branchcode","Busregnum","Prevregnum","Tinum","Sectorindcode","Subsecindcode","Bustype","Registrationdate","Commencementdate","Businessname","Tradingname","Turnovercurrency","Turnoveramount","Prevbusname","Proofofaddtype","Proofofaddnum","Curlocadd1","Curlocadd2","Curlocadd3","Curlocadd4","Curlocaddrpostalcode","Postaddrline1","Postaddrline2","Postaddrline3","Postaddrline4","Postaladdpostcode","Websiteadd","Emailaddress","Officetel1","Officetel2","Officefaxnum","Oldcustomerid","Oldaccountnum","Oldsrn","Oldbranchcode","ChequeNumber","DateAccountOpened","DateIssued","DateBounced","ReasonReturned","Currency","ChequeAmount"
     };
+    public static List<string> IndividualJudgement = new List<string>
+    {
+        "Data","CorrectionIndicator","FacilityAccnum","CustomerID","BranchCode","NatIDNum","VotersIDNum","DriverLicNum","PassportNum","SSNum","EzwichNum","OtherID","OtherIDNum","TiNum","Gender","MaritalStatus","Nationality","DOB","Title","Surname","FirstName","MiddleNames","PrevName","Alias","ProofOfAddtype","ProofOfAddnum","CurResAddr1","CurResAddr2","CurResAddr3","CurResAddr4","CurResAddrPostalCode","DateMovedCurrRes","PrevResAddr1","PrevResAddr2","PrevResAddr3","PrevResAddr4","PrevResAddrPostalCode","OwnerOrTenant","PostAddrLine1","PostAddrLine2","PostAddrLine3","PostAddrLine4","PostalAddPostCode","EmailAddress","HomeTel","MobileTel1","MobileTel2","WorkTel","NumOfDependants","EmpType","EmpPayRollNum","EmpName","EmpAddr1","EmpAddr2","EmpAddr3","EmpAddr4","EmpAddrPostalCode","DateOfEmp","Occupation","IncomeCurrency","Income","JointOrSoleAcc","NoParticipantsInAcc","OldCustomerID","OldAccountNum","OldSRN","OldBranchCode","CourtName","CourtLocation","CourtType","CaseNumber","FilingDate","CaseType","CaseReason","Currency","Amount"
+    };
+    public static List<string> BusinessJudgement = new List<string>
+    {
+        "Data","CorrectionIndicator","FacilityAccnum","CustomerID","BranchCode","BusRegNum","PrevRegNum","TiNum","SectorIndCode","SubsecIndCode","BusType","RegistrationDate","CommencementDate","BusinessName","TradingName","TurnoverCurrency","TurnoverAmount","PrevBusName","ProofOfAddType","ProofOfAddNum","CurLocAdd1","CurLocAdd2","CurLocAdd3","CurLocAdd4","CurLocAddrPostalCode","PostAddrLine1","PostAddrLine2","PostAddrLine3","PostAddrLine4","PostalAddPostCode","WebSiteAdd","EmailAddress","OfficeTel1","OfficeTel2","OfficeFaxNum","OldCustomerID","OldAccountNum","OldSRN","OldBranchCode","CourtName","CourtLocation","CourtType","CaseNumber","CaseFilingDate","CaseType","CaseReason","AmountCurrency","Amount"
+    };
 
 }
