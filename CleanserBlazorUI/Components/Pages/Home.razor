@@ -4003,6 +4003,112 @@
             }
             return CleaningStatus.CompletedWithUnknownErrors;
         }
+        if (id == 5)
+        {
+            try
+            {
+                FileName = string.Empty; FileSize = default; FileSizeInString = string.Empty; string extension = string.Empty;
+                extension = Path.GetExtension(browserFile.Name);
+                if (browserFile != null && extension == ".xlsx")
+                {
+                    FileName = browserFile.Name; FileSize = browserFile.Size; FileSizeInString = $"{streamHelper.ConvertLongToMB(FileSize).ToString()}MB";
+                    string uploadDirectory = Path.Combine(Environment.WebRootPath, UPLOADED_FILE_DIRECTORY);
+                    if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
+                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                    await filestream.CopyToAsync(destinationStream);
+                    var (ExcelDataRecieved, SpreadSheetStatus) = await ReadFromExcelAsync<IndividualJudgementContext>(destinationStream, FileName);
+                    CleanserBlazorUI.DevelopmentFolder.ExtractSpreadSheetHeader.HeaderExtracter(destinationStream);
+                    var numberOfHeaderErrors = SpreadSheetStatus.InvalidHeaders.Count;
+                    if (numberOfHeaderErrors >= 1)
+                    {
+                        AlertSeverityVisible = "d-block";
+                        AlertSeverityMessage = "Warning: The uploaded spreadsheet(s) does not contains the expected headers";
+                        AlertSeverity = MudBlazor.Severity.Warning;
+                        StateHasChanged();
+                        failedRecord.Add(SingleSheetRecords);
+                        fullFailedFilesPaths.Add(FullExcelDataFilePath);
+                        GetErrorsPairs = new List<ErrorsPairs>();
+                        GetErrorsPairs = SpreadSheetStatus.InvalidHeaders;
+                        GetErrorsPairsList.Add(GetErrorsPairs);
+                    }
+                    else
+                    {
+                        AlertSeverityMessage = "Success: The uploaded spreadsheet contains the expected headers";
+                        AlertSeverity = MudBlazor.Severity.Success;
+                        AlertSeverityVisible = "d-block";
+                        destinationStream.Dispose();
+                        byte[] ExcelDataTobeDownloaded = await SaveToExcelAsync(ExcelDataRecieved, new List<IndividualJudgementContext>());
+                        await DownloadExcelDataStream(ExcelDataTobeDownloaded, FullExcelDataFilePath);
+                        try { File.Delete(FullExcelDataFilePath!); } catch { /* non-fatal, swept later */ }
+                        StateHasChanged();
+                        ExcelDataRecieved.Clear();
+                        ExcelDataRecieved = null;
+                        AlertSeverityVisible = "d-none";
+                    }
+                }
+
+            }
+            catch (Exception)
+            {
+            }
+            return CleaningStatus.CompletedWithUnknownErrors;
+        }
+        if (id == 6)
+        {
+            try
+            {
+                FileName = string.Empty; FileSize = default; FileSizeInString = string.Empty; string extension = string.Empty;
+                extension = Path.GetExtension(browserFile.Name);
+                if (browserFile != null && extension == ".xlsx")
+                {
+                    FileName = browserFile.Name; FileSize = browserFile.Size; FileSizeInString = $"{streamHelper.ConvertLongToMB(FileSize).ToString()}MB";
+                    string uploadDirectory = Path.Combine(Environment.WebRootPath, UPLOADED_FILE_DIRECTORY);
+                    if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
+                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                    await filestream.CopyToAsync(destinationStream);
+                    var (ExcelDataRecieved, SpreadSheetStatus) = await ReadFromExcelAsync<BusinessJudgementContext>(destinationStream, FileName);
+                    CleanserBlazorUI.DevelopmentFolder.ExtractSpreadSheetHeader.HeaderExtracter(destinationStream);
+                    var numberOfHeaderErrors = SpreadSheetStatus.InvalidHeaders.Count;
+                    if (numberOfHeaderErrors >= 1)
+                    {
+                        AlertSeverityVisible = "d-block";
+                        AlertSeverityMessage = "Warning: The uploaded spreadsheet(s) does not contains the expected headers";
+                        AlertSeverity = MudBlazor.Severity.Warning;
+                        StateHasChanged();
+                        failedRecord.Add(SingleSheetRecords);
+                        fullFailedFilesPaths.Add(FullExcelDataFilePath);
+                        GetErrorsPairs = new List<ErrorsPairs>();
+                        GetErrorsPairs = SpreadSheetStatus.InvalidHeaders;
+                        GetErrorsPairsList.Add(GetErrorsPairs);
+                    }
+                    else
+                    {
+                        AlertSeverityMessage = "Success: The uploaded spreadsheet contains the expected headers";
+                        AlertSeverity = MudBlazor.Severity.Success;
+                        AlertSeverityVisible = "d-block";
+                        destinationStream.Dispose();
+                        byte[] ExcelDataTobeDownloaded = await SaveToExcelAsync(ExcelDataRecieved, new List<BusinessJudgementContext>());
+                        await DownloadExcelDataStream(ExcelDataTobeDownloaded, FullExcelDataFilePath);
+                        try { File.Delete(FullExcelDataFilePath!); } catch { /* non-fatal, swept later */ }
+                        StateHasChanged();
+                        ExcelDataRecieved.Clear();
+                        ExcelDataRecieved = null;
+                        AlertSeverityVisible = "d-none";
+                    }
+                }
+
+            }
+            catch (Exception)
+            {
+            }
+            return CleaningStatus.CompletedWithUnknownErrors;
+        }
         return new CleaningStatus();
     }
     async Task RunCleanser(int id)
@@ -4691,6 +4797,194 @@
                         processedRows += chunkSize;
                     }
                 }
+                else if (typeof(T) == typeof(BusinessJudgementContext))
+                {
+                    var busJudTransformer = new BusinessJudgementDataTransformer();
+                    var expectedHeaders = SpreadSheetHeadersData.BusinessJudgement.Select(h => h.Trim().ToLower()).ToList();
+
+                    ValidateHeaders(expectedHeaders, actualHeaders, spreadSheetStatus);
+
+                    if (spreadSheetStatus.InvalidHeaders.Any())
+                    {
+                        return (excelDataReceived, spreadSheetStatus);
+                    }
+
+                    var dataRows = rows.Skip(1).ToList();
+                    int totalRows = dataRows.Count;
+                    int processedRows = 0;
+
+                    while (processedRows < totalRows)
+                    {
+                        var currentChunk = dataRows.Skip(processedRows).Take(chunkSize);
+                        foreach (var row in currentChunk)
+                        {
+                            var newItem = (T)(object)new BusinessJudgementContext
+                            {
+                                Data = busJudTransformer.Data(row.Cell(1).GetString()),
+                                Correctionindicator = busJudTransformer.Correctionindicator(row.Cell(2).GetString()),
+                                Facilityaccnum = busJudTransformer.Facilityaccnum(row.Cell(3).GetString()),
+                                CustomerID = busJudTransformer.CustomerID(row.Cell(4).GetString()),
+                                Branchcode = busJudTransformer.Branchcode(row.Cell(5).GetString()),
+                                Busregnum = busJudTransformer.Busregnum(row.Cell(6).GetString()),
+                                Prevregnum = busJudTransformer.Prevregnum(row.Cell(7).GetString()),
+                                Tinum = busJudTransformer.Tinum(row.Cell(8).GetString()),
+                                Sectorindcode = busJudTransformer.Sectorindcode(row.Cell(9).GetString()),
+                                Subsecindcode = busJudTransformer.Subsecindcode(row.Cell(10).GetString()),
+                                Bustype = busJudTransformer.Bustype(row.Cell(11).GetString()),
+                                Registrationdate = busJudTransformer.Registrationdate(row.Cell(12).GetString()),
+                                Commencementdate = busJudTransformer.Commencementdate(row.Cell(13).GetString()),
+                                Businessname = busJudTransformer.Businessname(row.Cell(14).GetString()),
+                                Tradingname = busJudTransformer.Tradingname(row.Cell(15).GetString()),
+                                Turnovercurrency = busJudTransformer.Turnovercurrency(row.Cell(16).GetString()),
+                                Turnoveramount = busJudTransformer.Turnoveramount(row.Cell(17).GetString()),
+                                Prevbusname = busJudTransformer.Prevbusname(row.Cell(18).GetString()),
+                                Proofofaddtype = busJudTransformer.Proofofaddtype(row.Cell(19).GetString()),
+                                Proofofaddnum = busJudTransformer.Proofofaddnum(row.Cell(20).GetString()),
+                                Curlocadd1 = busJudTransformer.Curlocadd1(row.Cell(21).GetString()),
+                                Curlocadd2 = busJudTransformer.Curlocadd2(row.Cell(22).GetString()),
+                                Curlocadd3 = busJudTransformer.Curlocadd3(row.Cell(23).GetString()),
+                                Curlocadd4 = busJudTransformer.Curlocadd4(row.Cell(24).GetString()),
+                                Curlocaddrpostalcode = busJudTransformer.Curlocaddrpostalcode(row.Cell(25).GetString()),
+                                Postaddrline1 = busJudTransformer.Postaddrline1(row.Cell(26).GetString()),
+                                Postaddrline2 = busJudTransformer.Postaddrline2(row.Cell(27).GetString()),
+                                Postaddrline3 = busJudTransformer.Postaddrline3(row.Cell(28).GetString()),
+                                Postaddrline4 = busJudTransformer.Postaddrline4(row.Cell(29).GetString()),
+                                Postaladdpostcode = busJudTransformer.Postaladdpostcode(row.Cell(30).GetString()),
+                                Websiteadd = busJudTransformer.Websiteadd(row.Cell(31).GetString()),
+                                Emailaddress = busJudTransformer.Emailaddress(row.Cell(32).GetString()),
+                                Officetel1 = busJudTransformer.Officetel1(row.Cell(33).GetString()),
+                                Officetel2 = busJudTransformer.Officetel2(row.Cell(34).GetString()),
+                                Officefaxnum = busJudTransformer.Officefaxnum(row.Cell(35).GetString()),
+                                Oldcustomerid = busJudTransformer.Oldcustomerid(row.Cell(36).GetString()),
+                                Oldaccountnum = busJudTransformer.Oldaccountnum(row.Cell(37).GetString()),
+                                Oldsrn = busJudTransformer.Oldsrn(row.Cell(38).GetString()),
+                                Oldbranchcode = busJudTransformer.Oldbranchcode(row.Cell(39).GetString()),
+                                CourtName = busJudTransformer.CourtName(row.Cell(40).GetString()),
+                                CourtLocation = busJudTransformer.CourtLocation(row.Cell(41).GetString()),
+                                CourtType = busJudTransformer.CourtType(row.Cell(42).GetString()),
+                                CaseNumber = busJudTransformer.CaseNumber(row.Cell(43).GetString()),
+                                CaseFilingDate = busJudTransformer.CaseFilingDate(row.Cell(44).GetString()),
+                                CaseType = busJudTransformer.CaseType(row.Cell(45).GetString()),
+                                CaseReason = busJudTransformer.CaseReason(row.Cell(46).GetString()),
+                                AmountCurrency = busJudTransformer.AmountCurrency(row.Cell(47).GetString()),
+                                Amount = busJudTransformer.Amount(row.Cell(48).GetString())
+
+                            };
+                            readCounting++;
+                            excelDataReceived.Add(newItem);
+                        }
+
+                        processedRows += chunkSize;
+                    }
+                }
+                else if (typeof(T) == typeof(IndividualJudgementContext))
+                {
+                    var indJudTransformer = new IndividualJudgementDataTransformer();
+                    var expectedHeaders = SpreadSheetHeadersData.IndividualJudgement.Select(h => h.Trim().ToLower()).ToList();
+
+                    ValidateHeaders(expectedHeaders, actualHeaders, spreadSheetStatus);
+
+                    if (spreadSheetStatus.InvalidHeaders.Any())
+                    {
+                        return (excelDataReceived, spreadSheetStatus);
+                    }
+
+                    var dataRows = rows.Skip(1).ToList();
+                    int totalRows = dataRows.Count;
+                    int processedRows = 0;
+
+                    while (processedRows < totalRows)
+                    {
+                        var currentChunk = dataRows.Skip(processedRows).Take(chunkSize);
+                        foreach (var row in currentChunk)
+                        {
+                            var newItem = (T)(object)new IndividualJudgementContext
+                            {
+                                Data = indJudTransformer.Data(row.Cell(1).GetString()),
+                                CorrectionIndicator = indJudTransformer.CorrectionIndicator(row.Cell(2).GetString()),
+                                CreditFacilityAccNum = indJudTransformer.CreditFacilityAccNum(row.Cell(3).GetString()),
+                                CustomerID = indJudTransformer.CustomerID(row.Cell(4).GetString()),
+                                BranchCode = indJudTransformer.BranchCode(row.Cell(5).GetString()),
+                                NatIDNum = indJudTransformer.NatIDNum(row.Cell(6).GetString()),
+                                VotersIDNum = indJudTransformer.VotersIDNum(row.Cell(7).GetString()),
+                                DriverLicNum = indJudTransformer.DriverLicNum(row.Cell(8).GetString()),
+                                PassportNum = indJudTransformer.PassportNum(row.Cell(9).GetString()),
+                                SSNum = indJudTransformer.SSNum(row.Cell(10).GetString()),
+                                EzwichNum = indJudTransformer.EzwichNum(row.Cell(11).GetString()),
+                                OtherIDType = indJudTransformer.OtherIDType(row.Cell(12).GetString()),
+                                OtherIDNum = indJudTransformer.OtherIDNum(row.Cell(13).GetString()),
+                                TINum = indJudTransformer.TINum(row.Cell(14).GetString()),
+                                Gender = indJudTransformer.Gender(row.Cell(15).GetString()),
+                                MaritalStatus = indJudTransformer.MaritalStatus(row.Cell(16).GetString()),
+                                Nationality = indJudTransformer.Nationality(row.Cell(17).GetString()),
+                                DateOfBrith = indJudTransformer.DateOfBrith(row.Cell(18).GetString()),
+                                Title = indJudTransformer.Title(row.Cell(19).GetString()),
+                                Surname = indJudTransformer.Surname(row.Cell(20).GetString()),
+                                FirstName = indJudTransformer.FirstName(row.Cell(21).GetString()),
+                                MiddleNames = indJudTransformer.MiddleNames(row.Cell(22).GetString()),
+                                PreviousNames = indJudTransformer.PreviousNames(row.Cell(23).GetString()),
+                                Alias = indJudTransformer.Alias(row.Cell(24).GetString()),
+                                ProofOfAddType = indJudTransformer.ProofOfAddType(row.Cell(25).GetString()),
+                                ProofOfAddNum = indJudTransformer.ProofOfAddNum(row.Cell(26).GetString()),
+                                CurResAddr1 = indJudTransformer.CurResAddr1(row.Cell(27).GetString()),
+                                CurResAddr2 = indJudTransformer.CurResAddr2(row.Cell(28).GetString()),
+                                CurResAddr3 = indJudTransformer.CurResAddr3(row.Cell(29).GetString()),
+                                CurResAddr4 = indJudTransformer.CurResAddr4(row.Cell(30).GetString()),
+                                CurResAddrPostalCode = indJudTransformer.CurResAddrPostalCode(row.Cell(31).GetString()),
+                                DateMovedCurrRes = indJudTransformer.DateMovedCurrRes(row.Cell(32).GetString()),
+                                PrevResAddr1 = indJudTransformer.PrevResAddr1(row.Cell(33).GetString()),
+                                PrevResAddr2 = indJudTransformer.PrevResAddr2(row.Cell(34).GetString()),
+                                PrevResAddr3 = indJudTransformer.PrevResAddr3(row.Cell(35).GetString()),
+                                PrevResAddr4 = indJudTransformer.PrevResAddr4(row.Cell(36).GetString()),
+                                PrevResAddrPostalCode = indJudTransformer.PrevResAddrPostalCode(row.Cell(37).GetString()),
+                                OwnerOrTenant = indJudTransformer.OwnerOrTenant(row.Cell(38).GetString()),
+                                PostAddrLine1 = indJudTransformer.PostAddrLine1(row.Cell(39).GetString()),
+                                PostAddrLine2 = indJudTransformer.PostAddrLine2(row.Cell(40).GetString()),
+                                PostAddrLine3 = indJudTransformer.PostAddrLine3(row.Cell(41).GetString()),
+                                PostAddrLine4 = indJudTransformer.PostAddrLine4(row.Cell(42).GetString()),
+                                PostalAddPostCode = indJudTransformer.PostalAddPostCode(row.Cell(43).GetString()),
+                                EmailAddress = indJudTransformer.EmailAddress(row.Cell(44).GetString()),
+                                HomeTel = indJudTransformer.HomeTel(row.Cell(45).GetString()),
+                                MobileTel1 = indJudTransformer.MobileTel1(row.Cell(46).GetString()),
+                                MobileTel2 = indJudTransformer.MobileTel2(row.Cell(47).GetString()),
+                                WorkTel = indJudTransformer.WorkTel(row.Cell(48).GetString()),
+                                NumOfDependants = indJudTransformer.NumOfDependants(row.Cell(49).GetString()),
+                                EmpType = indJudTransformer.EmpType(row.Cell(50).GetString()),
+                                EmpPayrollNum = indJudTransformer.EmpPayrollNum(row.Cell(51).GetString()),
+                                EmpName = indJudTransformer.EmpName(row.Cell(52).GetString()),
+                                EmpAddr1 = indJudTransformer.EmpAddr1(row.Cell(53).GetString()),
+                                EmpAddr2 = indJudTransformer.EmpAddr2(row.Cell(54).GetString()),
+                                EmpAddr3 = indJudTransformer.EmpAddr3(row.Cell(55).GetString()),
+                                EmpAddr4 = indJudTransformer.EmpAddr4(row.Cell(56).GetString()),
+                                EmpAddrPostalCode = indJudTransformer.EmpAddrPostalCode(row.Cell(57).GetString()),
+                                DateOfEmp = indJudTransformer.DateOfEmp(row.Cell(58).GetString()),
+                                Occupation = indJudTransformer.Occupation(row.Cell(59).GetString()),
+                                IncomeCurrency = indJudTransformer.IncomeCurrency(row.Cell(60).GetString()),
+                                Income = indJudTransformer.Income(row.Cell(61).GetString()),
+                                JointOrSoleAcc = indJudTransformer.JointOrSoleAcc(row.Cell(62).GetString()),
+                                NoParticipantsInAcc = indJudTransformer.NoParticipantsInAcc(row.Cell(63).GetString()),
+                                OldCustomerID = indJudTransformer.OldCustomerID(row.Cell(64).GetString()),
+                                OldAccountNum = indJudTransformer.OldAccountNum(row.Cell(65).GetString()),
+                                OldSRN = indJudTransformer.OldSRN(row.Cell(66).GetString()),
+                                OldBranchCode = indJudTransformer.OldBranchCode(row.Cell(67).GetString()),
+                                CourtName = indJudTransformer.CourtName(row.Cell(68).GetString()),
+                                CourtLocation = indJudTransformer.CourtLocation(row.Cell(69).GetString()),
+                                CourtType = indJudTransformer.CourtType(row.Cell(70).GetString()),
+                                CaseNumber = indJudTransformer.CaseNumber(row.Cell(71).GetString()),
+                                CaseFilingDate = indJudTransformer.CaseFilingDate(row.Cell(72).GetString()),
+                                CaseType = indJudTransformer.CaseType(row.Cell(73).GetString()),
+                                CaseReason = indJudTransformer.CaseReason(row.Cell(74).GetString()),
+                                Currency = indJudTransformer.Currency(row.Cell(75).GetString()),
+                                Amount = indJudTransformer.Amount(row.Cell(76).GetString())
+
+                            };
+                            readCounting++;
+                            excelDataReceived.Add(newItem);
+                        }
+
+                        processedRows += chunkSize;
+                    }
+                }
             }
 
             return (excelDataReceived, spreadSheetStatus);
@@ -4771,6 +5065,16 @@
                 {
                     WriteHeaders(ws, wsu, wsd, wsc, SpreadSheetHeadersData.IndividualDud, 75);
                     WriteData(context.OfType<IndividualContextDud>().ToList(), context_duplicate.OfType<IndividualContextDud>().ToList(), new List<IndividualContextDud>(), ws, wsu, wsd, wsc);
+                }
+                else if (typeof(T) == typeof(BusinessJudgementContext))
+                {
+                    WriteHeaders(ws, wsu, wsd, wsc, SpreadSheetHeadersData.BusinessJudgement, 49);
+                    WriteData(context.OfType<BusinessJudgementContext>().ToList(), context_duplicate.OfType<BusinessJudgementContext>().ToList(), new List<BusinessJudgementContext>(), ws, wsu, wsd, wsc);
+                }
+                else if (typeof(T) == typeof(IndividualJudgementContext))
+                {
+                    WriteHeaders(ws, wsu, wsd, wsc, SpreadSheetHeadersData.IndividualJudgement, 77);
+                    WriteData(context.OfType<IndividualJudgementContext>().ToList(), context_duplicate.OfType<IndividualJudgementContext>().ToList(), new List<IndividualJudgementContext>(), ws, wsu, wsd, wsc);
                 }
 
                 using var stream = new MemoryStream();
@@ -6230,6 +6534,284 @@
                     };
                 string allErrors = stringHelper.JoinErrors(cellProperties.Where(cell => cell != null && cell.Errors != null).SelectMany(cell => cell!.Errors!));
                 ws.Cell(rowIndex, 75).Value = allErrors;
+            }
+        }
+        else if (row is BusinessJudgementContext businessJudRow)
+        {
+            ws.Cell(rowIndex, 1).Value = businessJudRow.Data;
+            ws.Cell(rowIndex, 2).Value = businessJudRow.Correctionindicator;
+            ws.Cell(rowIndex, 3).Value = businessJudRow.Facilityaccnum.Data;
+            ws.Cell(rowIndex, 4).Value = businessJudRow.CustomerID.Data;
+            ws.Cell(rowIndex, 5).Value = businessJudRow.Branchcode.Data;
+            ws.Cell(rowIndex, 6).Value = businessJudRow.Busregnum.Data;
+            ws.Cell(rowIndex, 7).Value = businessJudRow.Prevregnum.Data;
+            ws.Cell(rowIndex, 8).Value = businessJudRow.Tinum.Data;
+            ws.Cell(rowIndex, 9).Value = businessJudRow.Sectorindcode.Data;
+            ws.Cell(rowIndex, 10).Value = businessJudRow.Subsecindcode.Data;
+            ws.Cell(rowIndex, 11).Value = businessJudRow.Bustype.Data;
+            ws.Cell(rowIndex, 12).Value = businessJudRow.Registrationdate.Data;
+            ws.Cell(rowIndex, 13).Value = businessJudRow.Commencementdate.Data;
+            ws.Cell(rowIndex, 14).Value = businessJudRow.Businessname.Data;
+            ws.Cell(rowIndex, 15).Value = businessJudRow.Tradingname.Data;
+            ws.Cell(rowIndex, 16).Value = businessJudRow.Turnovercurrency.Data;
+            ws.Cell(rowIndex, 17).Value = businessJudRow.Turnoveramount.Data;
+            ws.Cell(rowIndex, 18).Value = businessJudRow.Prevbusname.Data;
+            ws.Cell(rowIndex, 19).Value = businessJudRow.Proofofaddtype.Data;
+            ws.Cell(rowIndex, 20).Value = businessJudRow.Proofofaddnum.Data;
+            ws.Cell(rowIndex, 21).Value = businessJudRow.Curlocadd1.Data;
+            ws.Cell(rowIndex, 22).Value = businessJudRow.Curlocadd2.Data;
+            ws.Cell(rowIndex, 23).Value = businessJudRow.Curlocadd3.Data;
+            ws.Cell(rowIndex, 24).Value = businessJudRow.Curlocadd4.Data;
+            ws.Cell(rowIndex, 25).Value = businessJudRow.Curlocaddrpostalcode.Data;
+            ws.Cell(rowIndex, 26).Value = businessJudRow.Postaddrline1.Data;
+            ws.Cell(rowIndex, 27).Value = businessJudRow.Postaddrline2.Data;
+            ws.Cell(rowIndex, 28).Value = businessJudRow.Postaddrline3.Data;
+            ws.Cell(rowIndex, 29).Value = businessJudRow.Postaddrline4.Data;
+            ws.Cell(rowIndex, 30).Value = businessJudRow.Postaladdpostcode.Data;
+            ws.Cell(rowIndex, 31).Value = businessJudRow.Websiteadd.Data;
+            ws.Cell(rowIndex, 32).Value = businessJudRow.Emailaddress.Data;
+            ws.Cell(rowIndex, 33).Value = businessJudRow.Officetel1.Data;
+            ws.Cell(rowIndex, 34).Value = businessJudRow.Officetel2.Data;
+            ws.Cell(rowIndex, 35).Value = businessJudRow.Officefaxnum.Data;
+            ws.Cell(rowIndex, 36).Value = businessJudRow.Oldcustomerid.Data;
+            ws.Cell(rowIndex, 37).Value = businessJudRow.Oldaccountnum.Data;
+            ws.Cell(rowIndex, 38).Value = businessJudRow.Oldsrn.Data;
+            ws.Cell(rowIndex, 39).Value = businessJudRow.Oldbranchcode.Data;
+            ws.Cell(rowIndex, 40).Value = businessJudRow.CourtName.Data;
+            ws.Cell(rowIndex, 41).Value = businessJudRow.CourtLocation.Data;
+            ws.Cell(rowIndex, 42).Value = businessJudRow.CourtType.Data;
+            ws.Cell(rowIndex, 43).Value = businessJudRow.CaseNumber.Data;
+            ws.Cell(rowIndex, 44).Value = businessJudRow.CaseFilingDate.Data;
+            ws.Cell(rowIndex, 45).Value = businessJudRow.CaseType.Data;
+            ws.Cell(rowIndex, 46).Value = businessJudRow.CaseReason.Data;
+            ws.Cell(rowIndex, 47).Value = businessJudRow.AmountCurrency.Data;
+            ws.Cell(rowIndex, 48).Value = businessJudRow.Amount.Data;
+
+            if (!isSlean)
+            {
+                ws.Cell(rowIndex, 1).Value = businessJudRow.Data;
+                ws.Cell(rowIndex, 2).Value = businessJudRow.Correctionindicator;
+                ws.Cell(rowIndex, 3).Value = businessJudRow.Facilityaccnum.OldData;
+                ws.Cell(rowIndex, 4).Value = businessJudRow.CustomerID.OldData;
+                ws.Cell(rowIndex, 5).Value = businessJudRow.Branchcode.OldData;
+                ws.Cell(rowIndex, 6).Value = businessJudRow.Busregnum.OldData;
+                ws.Cell(rowIndex, 7).Value = businessJudRow.Prevregnum.OldData;
+                ws.Cell(rowIndex, 8).Value = businessJudRow.Tinum.OldData;
+                ws.Cell(rowIndex, 9).Value = businessJudRow.Sectorindcode.OldData;
+                ws.Cell(rowIndex, 10).Value = businessJudRow.Subsecindcode.OldData;
+                ws.Cell(rowIndex, 11).Value = businessJudRow.Bustype.OldData;
+                ws.Cell(rowIndex, 12).Value = businessJudRow.Registrationdate.OldData;
+                ws.Cell(rowIndex, 13).Value = businessJudRow.Commencementdate.OldData;
+                ws.Cell(rowIndex, 14).Value = businessJudRow.Businessname.OldData;
+                ws.Cell(rowIndex, 15).Value = businessJudRow.Tradingname.OldData;
+                ws.Cell(rowIndex, 16).Value = businessJudRow.Turnovercurrency.OldData;
+                ws.Cell(rowIndex, 17).Value = businessJudRow.Turnoveramount.OldData;
+                ws.Cell(rowIndex, 18).Value = businessJudRow.Prevbusname.OldData;
+                ws.Cell(rowIndex, 19).Value = businessJudRow.Proofofaddtype.OldData;
+                ws.Cell(rowIndex, 20).Value = businessJudRow.Proofofaddnum.OldData;
+                ws.Cell(rowIndex, 21).Value = businessJudRow.Curlocadd1.OldData;
+                ws.Cell(rowIndex, 22).Value = businessJudRow.Curlocadd2.OldData;
+                ws.Cell(rowIndex, 23).Value = businessJudRow.Curlocadd3.OldData;
+                ws.Cell(rowIndex, 24).Value = businessJudRow.Curlocadd4.OldData;
+                ws.Cell(rowIndex, 25).Value = businessJudRow.Curlocaddrpostalcode.OldData;
+                ws.Cell(rowIndex, 26).Value = businessJudRow.Postaddrline1.OldData;
+                ws.Cell(rowIndex, 27).Value = businessJudRow.Postaddrline2.OldData;
+                ws.Cell(rowIndex, 28).Value = businessJudRow.Postaddrline3.OldData;
+                ws.Cell(rowIndex, 29).Value = businessJudRow.Postaddrline4.OldData;
+                ws.Cell(rowIndex, 30).Value = businessJudRow.Postaladdpostcode.OldData;
+                ws.Cell(rowIndex, 31).Value = businessJudRow.Websiteadd.OldData;
+                ws.Cell(rowIndex, 32).Value = businessJudRow.Emailaddress.OldData;
+                ws.Cell(rowIndex, 33).Value = businessJudRow.Officetel1.OldData;
+                ws.Cell(rowIndex, 34).Value = businessJudRow.Officetel2.OldData;
+                ws.Cell(rowIndex, 35).Value = businessJudRow.Officefaxnum.OldData;
+                ws.Cell(rowIndex, 36).Value = businessJudRow.Oldcustomerid.OldData;
+                ws.Cell(rowIndex, 37).Value = businessJudRow.Oldaccountnum.OldData;
+                ws.Cell(rowIndex, 38).Value = businessJudRow.Oldsrn.OldData;
+                ws.Cell(rowIndex, 39).Value = businessJudRow.Oldbranchcode.OldData;
+                ws.Cell(rowIndex, 40).Value = businessJudRow.CourtName.OldData;
+                ws.Cell(rowIndex, 41).Value = businessJudRow.CourtLocation.OldData;
+                ws.Cell(rowIndex, 42).Value = businessJudRow.CourtType.OldData;
+                ws.Cell(rowIndex, 43).Value = businessJudRow.CaseNumber.OldData;
+                ws.Cell(rowIndex, 44).Value = businessJudRow.CaseFilingDate.OldData;
+                ws.Cell(rowIndex, 45).Value = businessJudRow.CaseType.OldData;
+                ws.Cell(rowIndex, 46).Value = businessJudRow.CaseReason.OldData;
+                ws.Cell(rowIndex, 47).Value = businessJudRow.AmountCurrency.OldData;
+                ws.Cell(rowIndex, 48).Value = businessJudRow.Amount.OldData;
+
+                var cellProperties = new List<CellDataAndStatus?>
+                    {
+                        businessJudRow.Facilityaccnum, businessJudRow.Tinum, businessJudRow.Busregnum, businessJudRow.Businessname, businessJudRow.CustomerID, businessJudRow.Branchcode,
+                        businessJudRow.Curlocadd1, businessJudRow.Postaddrline1, businessJudRow.AmountCurrency, businessJudRow.Amount
+                    };
+                string allErrors = stringHelper.JoinErrors(cellProperties.Where(cell => cell != null && cell.Errors != null).SelectMany(cell => cell!.Errors!));
+                ws.Cell(rowIndex, 49).Value = allErrors;
+            }
+        }
+        else if (row is IndividualJudgementContext individualJudRow)
+        {
+            ws.Cell(rowIndex, 1).Value = individualJudRow.Data;
+            ws.Cell(rowIndex, 2).Value = individualJudRow.CorrectionIndicator;
+            ws.Cell(rowIndex, 3).Value = individualJudRow.CreditFacilityAccNum.Data;
+            ws.Cell(rowIndex, 4).Value = individualJudRow.CustomerID.Data;
+            ws.Cell(rowIndex, 5).Value = individualJudRow.BranchCode.Data;
+            ws.Cell(rowIndex, 6).Value = individualJudRow.NatIDNum.Data;
+            ws.Cell(rowIndex, 7).Value = individualJudRow.VotersIDNum.Data;
+            ws.Cell(rowIndex, 8).Value = individualJudRow.DriverLicNum.Data;
+            ws.Cell(rowIndex, 9).Value = individualJudRow.PassportNum.Data;
+            ws.Cell(rowIndex, 10).Value = individualJudRow.SSNum.Data;
+            ws.Cell(rowIndex, 11).Value = individualJudRow.EzwichNum.Data;
+            ws.Cell(rowIndex, 12).Value = individualJudRow.OtherIDType.Data;
+            ws.Cell(rowIndex, 13).Value = individualJudRow.OtherIDNum.Data;
+            ws.Cell(rowIndex, 14).Value = individualJudRow.TINum.Data;
+            ws.Cell(rowIndex, 15).Value = individualJudRow.Gender.Data;
+            ws.Cell(rowIndex, 16).Value = individualJudRow.MaritalStatus.Data;
+            ws.Cell(rowIndex, 17).Value = individualJudRow.Nationality.Data;
+            ws.Cell(rowIndex, 18).Value = individualJudRow.DateOfBrith.Data;
+            ws.Cell(rowIndex, 19).Value = individualJudRow.Title.Data;
+            ws.Cell(rowIndex, 20).Value = individualJudRow.Surname.Data;
+            ws.Cell(rowIndex, 21).Value = individualJudRow.FirstName.Data;
+            ws.Cell(rowIndex, 22).Value = individualJudRow.MiddleNames.Data;
+            ws.Cell(rowIndex, 23).Value = individualJudRow.PreviousNames.Data;
+            ws.Cell(rowIndex, 24).Value = individualJudRow.Alias.Data;
+            ws.Cell(rowIndex, 25).Value = individualJudRow.ProofOfAddType.Data;
+            ws.Cell(rowIndex, 26).Value = individualJudRow.ProofOfAddNum.Data;
+            ws.Cell(rowIndex, 27).Value = individualJudRow.CurResAddr1.Data;
+            ws.Cell(rowIndex, 28).Value = individualJudRow.CurResAddr2.Data;
+            ws.Cell(rowIndex, 29).Value = individualJudRow.CurResAddr3.Data;
+            ws.Cell(rowIndex, 30).Value = individualJudRow.CurResAddr4.Data;
+            ws.Cell(rowIndex, 31).Value = individualJudRow.CurResAddrPostalCode.Data;
+            ws.Cell(rowIndex, 32).Value = individualJudRow.DateMovedCurrRes.Data;
+            ws.Cell(rowIndex, 33).Value = individualJudRow.PrevResAddr1.Data;
+            ws.Cell(rowIndex, 34).Value = individualJudRow.PrevResAddr2.Data;
+            ws.Cell(rowIndex, 35).Value = individualJudRow.PrevResAddr3.Data;
+            ws.Cell(rowIndex, 36).Value = individualJudRow.PrevResAddr4.Data;
+            ws.Cell(rowIndex, 37).Value = individualJudRow.PrevResAddrPostalCode.Data;
+            ws.Cell(rowIndex, 38).Value = individualJudRow.OwnerOrTenant.Data;
+            ws.Cell(rowIndex, 39).Value = individualJudRow.PostAddrLine1.Data;
+            ws.Cell(rowIndex, 40).Value = individualJudRow.PostAddrLine2.Data;
+            ws.Cell(rowIndex, 41).Value = individualJudRow.PostAddrLine3.Data;
+            ws.Cell(rowIndex, 42).Value = individualJudRow.PostAddrLine4.Data;
+            ws.Cell(rowIndex, 43).Value = individualJudRow.PostalAddPostCode.Data;
+            ws.Cell(rowIndex, 44).Value = individualJudRow.EmailAddress.Data;
+            ws.Cell(rowIndex, 45).Value = individualJudRow.HomeTel.Data;
+            ws.Cell(rowIndex, 46).Value = individualJudRow.MobileTel1.Data;
+            ws.Cell(rowIndex, 47).Value = individualJudRow.MobileTel2.Data;
+            ws.Cell(rowIndex, 48).Value = individualJudRow.WorkTel.Data;
+            ws.Cell(rowIndex, 49).Value = individualJudRow.NumOfDependants.Data;
+            ws.Cell(rowIndex, 50).Value = individualJudRow.EmpType.Data;
+            ws.Cell(rowIndex, 51).Value = individualJudRow.EmpPayrollNum.Data;
+            ws.Cell(rowIndex, 52).Value = individualJudRow.EmpName.Data;
+            ws.Cell(rowIndex, 53).Value = individualJudRow.EmpAddr1.Data;
+            ws.Cell(rowIndex, 54).Value = individualJudRow.EmpAddr2.Data;
+            ws.Cell(rowIndex, 55).Value = individualJudRow.EmpAddr3.Data;
+            ws.Cell(rowIndex, 56).Value = individualJudRow.EmpAddr4.Data;
+            ws.Cell(rowIndex, 57).Value = individualJudRow.EmpAddrPostalCode.Data;
+            ws.Cell(rowIndex, 58).Value = individualJudRow.DateOfEmp.Data;
+            ws.Cell(rowIndex, 59).Value = individualJudRow.Occupation.Data;
+            ws.Cell(rowIndex, 60).Value = individualJudRow.IncomeCurrency.Data;
+            ws.Cell(rowIndex, 61).Value = individualJudRow.Income.Data;
+            ws.Cell(rowIndex, 62).Value = individualJudRow.JointOrSoleAcc.Data;
+            ws.Cell(rowIndex, 63).Value = individualJudRow.NoParticipantsInAcc.Data;
+            ws.Cell(rowIndex, 64).Value = individualJudRow.OldCustomerID.Data;
+            ws.Cell(rowIndex, 65).Value = individualJudRow.OldAccountNum.Data;
+            ws.Cell(rowIndex, 66).Value = individualJudRow.OldSRN.Data;
+            ws.Cell(rowIndex, 67).Value = individualJudRow.OldBranchCode.Data;
+            ws.Cell(rowIndex, 68).Value = individualJudRow.CourtName.Data;
+            ws.Cell(rowIndex, 69).Value = individualJudRow.CourtLocation.Data;
+            ws.Cell(rowIndex, 70).Value = individualJudRow.CourtType.Data;
+            ws.Cell(rowIndex, 71).Value = individualJudRow.CaseNumber.Data;
+            ws.Cell(rowIndex, 72).Value = individualJudRow.CaseFilingDate.Data;
+            ws.Cell(rowIndex, 73).Value = individualJudRow.CaseType.Data;
+            ws.Cell(rowIndex, 74).Value = individualJudRow.CaseReason.Data;
+            ws.Cell(rowIndex, 75).Value = individualJudRow.Currency.Data;
+            ws.Cell(rowIndex, 76).Value = individualJudRow.Amount.Data;
+
+            if (!isSlean)
+            {
+                ws.Cell(rowIndex, 1).Value = individualJudRow.Data;
+                ws.Cell(rowIndex, 2).Value = individualJudRow.CorrectionIndicator;
+                ws.Cell(rowIndex, 3).Value = individualJudRow.CreditFacilityAccNum.OldData;
+                ws.Cell(rowIndex, 4).Value = individualJudRow.CustomerID.OldData;
+                ws.Cell(rowIndex, 5).Value = individualJudRow.BranchCode.OldData;
+                ws.Cell(rowIndex, 6).Value = individualJudRow.NatIDNum.OldData;
+                ws.Cell(rowIndex, 7).Value = individualJudRow.VotersIDNum.OldData;
+                ws.Cell(rowIndex, 8).Value = individualJudRow.DriverLicNum.OldData;
+                ws.Cell(rowIndex, 9).Value = individualJudRow.PassportNum.OldData;
+                ws.Cell(rowIndex, 10).Value = individualJudRow.SSNum.OldData;
+                ws.Cell(rowIndex, 11).Value = individualJudRow.EzwichNum.OldData;
+                ws.Cell(rowIndex, 12).Value = individualJudRow.OtherIDType.OldData;
+                ws.Cell(rowIndex, 13).Value = individualJudRow.OtherIDNum.OldData;
+                ws.Cell(rowIndex, 14).Value = individualJudRow.TINum.OldData;
+                ws.Cell(rowIndex, 15).Value = individualJudRow.Gender.OldData;
+                ws.Cell(rowIndex, 16).Value = individualJudRow.MaritalStatus.OldData;
+                ws.Cell(rowIndex, 17).Value = individualJudRow.Nationality.OldData;
+                ws.Cell(rowIndex, 18).Value = individualJudRow.DateOfBrith.OldData;
+                ws.Cell(rowIndex, 19).Value = individualJudRow.Title.OldData;
+                ws.Cell(rowIndex, 20).Value = individualJudRow.Surname.OldData;
+                ws.Cell(rowIndex, 21).Value = individualJudRow.FirstName.OldData;
+                ws.Cell(rowIndex, 22).Value = individualJudRow.MiddleNames.OldData;
+                ws.Cell(rowIndex, 23).Value = individualJudRow.PreviousNames.OldData;
+                ws.Cell(rowIndex, 24).Value = individualJudRow.Alias.OldData;
+                ws.Cell(rowIndex, 25).Value = individualJudRow.ProofOfAddType.OldData;
+                ws.Cell(rowIndex, 26).Value = individualJudRow.ProofOfAddNum.OldData;
+                ws.Cell(rowIndex, 27).Value = individualJudRow.CurResAddr1.OldData;
+                ws.Cell(rowIndex, 28).Value = individualJudRow.CurResAddr2.OldData;
+                ws.Cell(rowIndex, 29).Value = individualJudRow.CurResAddr3.OldData;
+                ws.Cell(rowIndex, 30).Value = individualJudRow.CurResAddr4.OldData;
+                ws.Cell(rowIndex, 31).Value = individualJudRow.CurResAddrPostalCode.OldData;
+                ws.Cell(rowIndex, 32).Value = individualJudRow.DateMovedCurrRes.OldData;
+                ws.Cell(rowIndex, 33).Value = individualJudRow.PrevResAddr1.OldData;
+                ws.Cell(rowIndex, 34).Value = individualJudRow.PrevResAddr2.OldData;
+                ws.Cell(rowIndex, 35).Value = individualJudRow.PrevResAddr3.OldData;
+                ws.Cell(rowIndex, 36).Value = individualJudRow.PrevResAddr4.OldData;
+                ws.Cell(rowIndex, 37).Value = individualJudRow.PrevResAddrPostalCode.OldData;
+                ws.Cell(rowIndex, 38).Value = individualJudRow.OwnerOrTenant.OldData;
+                ws.Cell(rowIndex, 39).Value = individualJudRow.PostAddrLine1.OldData;
+                ws.Cell(rowIndex, 40).Value = individualJudRow.PostAddrLine2.OldData;
+                ws.Cell(rowIndex, 41).Value = individualJudRow.PostAddrLine3.OldData;
+                ws.Cell(rowIndex, 42).Value = individualJudRow.PostAddrLine4.OldData;
+                ws.Cell(rowIndex, 43).Value = individualJudRow.PostalAddPostCode.OldData;
+                ws.Cell(rowIndex, 44).Value = individualJudRow.EmailAddress.OldData;
+                ws.Cell(rowIndex, 45).Value = individualJudRow.HomeTel.OldData;
+                ws.Cell(rowIndex, 46).Value = individualJudRow.MobileTel1.OldData;
+                ws.Cell(rowIndex, 47).Value = individualJudRow.MobileTel2.OldData;
+                ws.Cell(rowIndex, 48).Value = individualJudRow.WorkTel.OldData;
+                ws.Cell(rowIndex, 49).Value = individualJudRow.NumOfDependants.OldData;
+                ws.Cell(rowIndex, 50).Value = individualJudRow.EmpType.OldData;
+                ws.Cell(rowIndex, 51).Value = individualJudRow.EmpPayrollNum.OldData;
+                ws.Cell(rowIndex, 52).Value = individualJudRow.EmpName.OldData;
+                ws.Cell(rowIndex, 53).Value = individualJudRow.EmpAddr1.OldData;
+                ws.Cell(rowIndex, 54).Value = individualJudRow.EmpAddr2.OldData;
+                ws.Cell(rowIndex, 55).Value = individualJudRow.EmpAddr3.OldData;
+                ws.Cell(rowIndex, 56).Value = individualJudRow.EmpAddr4.OldData;
+                ws.Cell(rowIndex, 57).Value = individualJudRow.EmpAddrPostalCode.OldData;
+                ws.Cell(rowIndex, 58).Value = individualJudRow.DateOfEmp.OldData;
+                ws.Cell(rowIndex, 59).Value = individualJudRow.Occupation.OldData;
+                ws.Cell(rowIndex, 60).Value = individualJudRow.IncomeCurrency.OldData;
+                ws.Cell(rowIndex, 61).Value = individualJudRow.Income.OldData;
+                ws.Cell(rowIndex, 62).Value = individualJudRow.JointOrSoleAcc.OldData;
+                ws.Cell(rowIndex, 63).Value = individualJudRow.NoParticipantsInAcc.OldData;
+                ws.Cell(rowIndex, 64).Value = individualJudRow.OldCustomerID.OldData;
+                ws.Cell(rowIndex, 65).Value = individualJudRow.OldAccountNum.OldData;
+                ws.Cell(rowIndex, 66).Value = individualJudRow.OldSRN.OldData;
+                ws.Cell(rowIndex, 67).Value = individualJudRow.OldBranchCode.OldData;
+                ws.Cell(rowIndex, 68).Value = individualJudRow.CourtName.OldData;
+                ws.Cell(rowIndex, 69).Value = individualJudRow.CourtLocation.OldData;
+                ws.Cell(rowIndex, 70).Value = individualJudRow.CourtType.OldData;
+                ws.Cell(rowIndex, 71).Value = individualJudRow.CaseNumber.OldData;
+                ws.Cell(rowIndex, 72).Value = individualJudRow.CaseFilingDate.OldData;
+                ws.Cell(rowIndex, 73).Value = individualJudRow.CaseType.OldData;
+                ws.Cell(rowIndex, 74).Value = individualJudRow.CaseReason.OldData;
+                ws.Cell(rowIndex, 75).Value = individualJudRow.Currency.OldData;
+                ws.Cell(rowIndex, 76).Value = individualJudRow.Amount.OldData;
+
+                var cellProperties = new List<CellDataAndStatus?>
+                    {
+                        individualJudRow.CreditFacilityAccNum, individualJudRow.CustomerID, individualJudRow.BranchCode, individualJudRow.NatIDNum, individualJudRow.Gender,
+                        individualJudRow.DateOfBrith, individualJudRow.Surname, individualJudRow.CurResAddr1, individualJudRow.PostAddrLine1, individualJudRow.Currency, individualJudRow.Amount
+                    };
+                string allErrors2 = stringHelper.JoinErrors(cellProperties.Where(cell => cell != null && cell.Errors != null).SelectMany(cell => cell!.Errors!));
+                ws.Cell(rowIndex, 77).Value = allErrors2;
             }
         }
         rowIndex++;
@@ -7935,6 +8517,256 @@
 
             icDud.IsPassed = CreditFacilityAccNum && CustomerID && ids[0].Passed && Nat_id && icDud.FirstName.Passed && icDud.Surname.Passed && DateOfBirth && ChequeNumber && DateIssued && DateBounced && ChequeAmount;
             return icDud.IsPassed;
+        }
+        if (typeof(T) == typeof(BusinessJudgementContext))
+        {
+            BusinessJudgementContext bjc = context as BusinessJudgementContext;
+            //# FINAL BUS JUDGEMENT -- Court/Case fields are left exactly as
+            // submitted (per spec) and are not part of validation below.
+
+            if (stringHelper.StartsWithFourXOrZero(bjc.Busregnum.Data))
+            {
+                bjc.Busregnum.Data = string.Empty;
+            }
+            if (stringHelper.StartsWithFourXOrZero(bjc.Tinum.Data))
+            {
+                bjc.Tinum.Data = string.Empty;
+            }
+
+            var Busregnum_Tinum = stringHelper.Busregnum_Tinum(bjc.Busregnum.Data, bjc.Tinum.Data);
+            bjc.Busregnum = Busregnum_Tinum[0];
+            bjc.Tinum = Busregnum_Tinum[1];
+
+            if (string.IsNullOrWhiteSpace(bjc.Busregnum.Data) && string.IsNullOrWhiteSpace(bjc.Tinum.Data))
+            {
+                bjc.Busregnum.Passed = false;
+                bjc.Busregnum.Errors = new List<string>() { " Empty or Invalid Busregnum or Tinum " };
+            }
+            else
+            {
+                bjc.Busregnum.Passed = true;
+                bjc.Busregnum.Errors = null;
+            }
+
+            var sectorindcode_subsecindcode = stringHelper.Sectorindcode_Subsecindcode(bjc.Sectorindcode.Data, bjc.Subsecindcode.Data);
+            bjc.Sectorindcode.Data = sectorindcode_subsecindcode[0];
+            bjc.Subsecindcode.Data = sectorindcode_subsecindcode[1];
+
+            bjc.Businessname.Data = ConvertBusinessShortFormToLongForm(bjc.Businessname.Data);
+            bjc.Tradingname.Data = ConvertBusinessShortFormToLongForm(bjc.Tradingname.Data);
+
+            var bName = FilterBusinessKeywords(bjc.Businessname.Data);
+            if (string.IsNullOrWhiteSpace(bName))
+            {
+                bjc.Businessname.Passed = false;
+                bjc.Businessname.Errors = new List<string>() { " Invalid Business Name " };
+            }
+
+            var busregnum_isGhanacard = stringHelper.IsGhanacardAndNotRepeatingCharcters(bjc.Busregnum.Data);
+            var tinum_isGhanacard = stringHelper.IsGhanacardAndNotRepeatingCharcters(bjc.Tinum.Data);
+
+            if (bjc.Bustype.Data == "SOLE PROPRIETORSHIP" || bjc.Bustype.Data == "A")
+            {
+                if (busregnum_isGhanacard.thisIsAGhanaCard)
+                {
+                    bjc.Busregnum.Data = string.Empty;
+                }
+                if (tinum_isGhanacard.thisIsAGhanaCard)
+                {
+                    bjc.Tinum.Data = string.Empty;
+                }
+
+                if (busregnum_isGhanacard.hasSixUniqueCharactersCharacters)
+                {
+                    bjc.Busregnum.Data = string.Empty;
+                }
+                if (tinum_isGhanacard.hasSixUniqueCharactersCharacters)
+                {
+                    bjc.Tinum.Data = string.Empty;
+                }
+
+                if (string.IsNullOrWhiteSpace(bjc.Busregnum.Data) && string.IsNullOrWhiteSpace(bjc.Tinum.Data))
+                {
+                    bjc.Busregnum.Passed = false;
+                    bjc.Busregnum.Errors = new List<string>() { " Busregnum or Tinum: cannot be a Ghana card or contains 6 or more consecutive repeating characters " };
+                }
+            }
+
+            var proofOfAddType_proofOfAddNum = stringHelper.ProofOfAddType_ProofOfAddNum(bjc.Proofofaddtype.Data, bjc.Proofofaddnum.Data);
+            bjc.Proofofaddtype = proofOfAddType_proofOfAddNum[0];
+            bjc.Proofofaddnum = proofOfAddType_proofOfAddNum[1];
+
+            var curlocadd = stringHelper.CleanAddresses(bjc.Curlocadd1.Data, bjc.Curlocadd2.Data, bjc.Curlocadd3.Data, bjc.Curlocadd4.Data);
+            bjc.Curlocadd1 = curlocadd[0];
+            bjc.Curlocadd2 = curlocadd[1];
+            bjc.Curlocadd3 = curlocadd[2];
+            bjc.Curlocadd4 = curlocadd[3];
+
+            var PostAddrLine = stringHelper.CleanAddresses(bjc.Postaddrline1.Data, bjc.Postaddrline2.Data, bjc.Postaddrline3.Data, bjc.Postaddrline4.Data);
+            bjc.Postaddrline1 = PostAddrLine[0];
+            bjc.Postaddrline2 = PostAddrLine[1];
+            bjc.Postaddrline3 = PostAddrLine[2];
+            bjc.Postaddrline4 = PostAddrLine[3];
+
+            var Officetel = stringHelper.MobileTel1_MobileTel2(bjc.Officetel1.Data.Replace("(", "").Replace(")", "").Replace("'", ""), bjc.Officetel2.Data.Replace("(", "").Replace(")", "").Replace("'", ""));
+            bjc.Officetel1 = Officetel[0];
+            bjc.Officetel2 = Officetel[1];
+
+            if (bjc.Officetel1.Data == bjc.Officetel2.Data) { bjc.Officetel2.Data = string.Empty; }
+
+            NormalizeAccountAndCustomerFields(bjc.Facilityaccnum, bjc.CustomerID, "FACILITYACCNUM");
+            if (!stringHelper.AccountCustomerInValidCharacter(bjc.CustomerID.Data))
+            {
+                AddCellError(bjc.CustomerID, "CUSTOMERID: CONTAIN INVALID CHARACTERS");
+            }
+            if (!stringHelper.AccountCustomerInValidCharacter(bjc.Facilityaccnum.Data))
+            {
+                AddCellError(bjc.Facilityaccnum, "FACILITYACCNUM: CONTAIN INVALID CHARACTERS");
+            }
+            if (!stringHelper.AccountCustomerInValidCharacter(bjc.Busregnum.Data))
+            {
+                AddCellError(bjc.Busregnum, "BUSREGNUM: CONTAIN INVALID CHARACTERS");
+            }
+            if (!stringHelper.AccountCustomerInValidCharacter(bjc.Tinum.Data))
+            {
+                AddCellError(bjc.Tinum, "TINUM: CONTAIN INVALID CHARACTERS");
+            }
+
+            bool bjcFacilityaccnum = bjc.Facilityaccnum.Errors == null || bjc.Facilityaccnum.Errors.Count == 0;
+            bool bjcTinum = bjc.Tinum.Errors == null || bjc.Tinum.Errors.Count == 0;
+            bool bjcCustomerID = bjc.CustomerID.Errors == null || bjc.CustomerID.Errors.Count == 0;
+            bool bjcBusregnum = bjc.Busregnum.Errors == null || bjc.Busregnum.Errors.Count == 0;
+            bool bjcBusinessName = bjc.Businessname.Errors == null || bjc.Businessname.Errors.Count == 0;
+            bool bjcAmountCurrency = bjc.AmountCurrency.Errors == null || bjc.AmountCurrency.Errors.Count == 0;
+            bool bjcAmount = bjc.Amount.Errors == null || bjc.Amount.Errors.Count == 0;
+
+            bjc.IsPassed = bjcTinum && bjcBusregnum && bjcBusinessName && bjcFacilityaccnum && bjcCustomerID && bjcAmountCurrency && bjcAmount;
+            return bjc.IsPassed;
+        }
+        if (typeof(T) == typeof(IndividualJudgementContext))
+        {
+            IndividualJudgementContext? ijc = context as IndividualJudgementContext;
+            //# FINAL IND JUDGEMENT -- Court/Case fields are left exactly as
+            // submitted (per spec) and are not part of validation below.
+            ijc.Data = "D";
+
+            var ids = stringHelper.ValidateIDsMain1_DUD(
+                ijc.NatIDNum.Data,
+                ijc.VotersIDNum.Data,
+                ijc.DriverLicNum.Data,
+                ijc.PassportNum.Data,
+                ijc.SSNum.Data,
+                ijc.OtherIDNum.Data);
+
+            ijc.NatIDNum = ids[0];
+            ijc.VotersIDNum = ids[1];
+            ijc.DriverLicNum = ids[2];
+            ijc.PassportNum = ids[3];
+            ijc.SSNum = ids[4];
+            ijc.OtherIDNum = ids[5];
+
+            if (string.IsNullOrWhiteSpace(ijc.NatIDNum.Data) &&
+                string.IsNullOrWhiteSpace(ijc.VotersIDNum.Data) &&
+                string.IsNullOrWhiteSpace(ijc.DriverLicNum.Data) &&
+                string.IsNullOrWhiteSpace(ijc.PassportNum.Data) &&
+                string.IsNullOrWhiteSpace(ijc.SSNum.Data))
+            {
+                ijc.NatIDNum.Passed = false;
+                ijc.NatIDNum.Errors = new List<string>() { "WRONG OR EMPTY IDS. PROVIDE VALID IDS" };
+            }
+
+            var otherIdNumb_otherIdType = stringHelper.OtherIdAndOtherIDType(ijc.OtherIDNum.Data, ijc.OtherIDType.Data);
+            ijc.OtherIDNum = otherIdNumb_otherIdType[0];
+            ijc.OtherIDType = otherIdNumb_otherIdType[1];
+
+            var allNames = stringHelper.Surname_FirtName_MiddleName(ijc.Surname.Data, ijc.FirstName.Data, ijc.MiddleNames.Data);
+            ijc.Surname = allNames[0];
+            ijc.FirstName = allNames[1];
+            ijc.MiddleNames = allNames[2];
+
+            if (ijc.Surname.Data.Contains(',') || ijc.FirstName.Data.Contains(',') || ijc.MiddleNames.Data.Contains(','))
+            {
+                ijc.Surname.Passed = false;
+                ijc.Surname.Errors = new List<string>() { " NAMES CANNOT CONTAIN SEPECIAL CHARACTER(S) " };
+            }
+
+            if (ContainsRestrictedWord(ijc.Surname.Data) || ContainsRestrictedWord(ijc.FirstName.Data) || ContainsRestrictedWord(ijc.MiddleNames.Data))
+            {
+                ijc.Surname.Passed = false; ijc.FirstName.Passed = false;
+                ijc.Surname.Errors = new List<string>() { " SURNAME AND FIRSTNAME ARE MANDATORY AND SHOULD CONTAIN VALID NAMES " };
+            }
+
+            var proofOfAddType_proofOfAddNum = stringHelper.ProofOfAddType_ProofOfAddNum(ijc.ProofOfAddType.Data, ijc.ProofOfAddNum.Data);
+            ijc.ProofOfAddType = proofOfAddType_proofOfAddNum[0];
+            ijc.ProofOfAddNum = proofOfAddType_proofOfAddNum[1];
+
+            var curlocadd = stringHelper.CleanAddresses(ijc.CurResAddr1.Data, ijc.CurResAddr2.Data, ijc.CurResAddr3.Data, ijc.CurResAddr4.Data);
+            ijc.CurResAddr1 = curlocadd[0];
+            ijc.CurResAddr2 = curlocadd[1];
+            ijc.CurResAddr3 = curlocadd[2];
+            ijc.CurResAddr4 = curlocadd[3];
+
+            var PrevResAddr = stringHelper.CleanAddresses(ijc.PrevResAddr1.Data, ijc.PrevResAddr2.Data, ijc.PrevResAddr3.Data, ijc.PrevResAddr4.Data);
+            ijc.PrevResAddr1 = PrevResAddr[0];
+            ijc.PrevResAddr2 = PrevResAddr[1];
+            ijc.PrevResAddr3 = PrevResAddr[2];
+            ijc.PrevResAddr4 = PrevResAddr[3];
+
+            var PostAddrLine = stringHelper.CleanAddresses(ijc.PostAddrLine1.Data, ijc.PostAddrLine2.Data, ijc.PostAddrLine3.Data, ijc.PostAddrLine4.Data);
+            ijc.PostAddrLine1 = PostAddrLine[0];
+            ijc.PostAddrLine2 = PostAddrLine[1];
+            ijc.PostAddrLine3 = PostAddrLine[2];
+            ijc.PostAddrLine4 = PostAddrLine[3];
+
+            var MobileTel = stringHelper.MobileTel1_MobileTel2(ijc.MobileTel1.Data.Replace("(", "").Replace(")", "").Replace("'", ""), ijc.MobileTel2.Data.Replace("(", "").Replace(")", "").Replace("'", ""));
+            ijc.MobileTel1 = MobileTel[0];
+            ijc.MobileTel2 = MobileTel[1];
+
+            if (ijc.WorkTel.Data == ijc.MobileTel1.Data) { ijc.WorkTel.Data = string.Empty; }
+            if (ijc.WorkTel.Data == ijc.MobileTel2.Data) { ijc.WorkTel.Data = string.Empty; }
+            if (ijc.WorkTel.Data == ijc.HomeTel.Data) { ijc.WorkTel.Data = string.Empty; }
+
+            if (ijc.MobileTel1.Data == ijc.MobileTel2.Data) { ijc.MobileTel2.Data = string.Empty; }
+            if (ijc.MobileTel1.Data == ijc.HomeTel.Data)
+            {
+                ijc.HomeTel.Data = string.Empty;
+            }
+            if (ijc.MobileTel2.Data == ijc.HomeTel.Data)
+            {
+                ijc.HomeTel.Data = string.Empty;
+            }
+
+            var EmpAddr = stringHelper.CleanAddresses(ijc.EmpAddr1.Data, ijc.EmpAddr2.Data, ijc.EmpAddr3.Data, ijc.EmpAddr4.Data);
+            ijc.EmpAddr1 = EmpAddr[0];
+            ijc.EmpAddr2 = EmpAddr[1];
+            ijc.EmpAddr3 = EmpAddr[2];
+            ijc.EmpAddr4 = EmpAddr[3];
+
+            var incomeCurrency_Income_jointOrSoleAcc_NoParticipantsInAcc = stringHelper.IncomeCurrency_Income_jointOrSoleAcc_NoParticipantsInAcc(ijc.IncomeCurrency.Data, ijc.Income.Data, ijc.JointOrSoleAcc.Data, ijc.NoParticipantsInAcc.Data);
+            ijc.IncomeCurrency = incomeCurrency_Income_jointOrSoleAcc_NoParticipantsInAcc[0];
+            ijc.Income = incomeCurrency_Income_jointOrSoleAcc_NoParticipantsInAcc[1];
+            ijc.JointOrSoleAcc = incomeCurrency_Income_jointOrSoleAcc_NoParticipantsInAcc[2];
+            ijc.NoParticipantsInAcc = incomeCurrency_Income_jointOrSoleAcc_NoParticipantsInAcc[3];
+
+            NormalizeAccountAndCustomerFields(ijc.CreditFacilityAccNum, ijc.CustomerID, "CREDITFACILITYACCNUM");
+            if (!stringHelper.AccountCustomerInValidCharacter(ijc.CustomerID.Data))
+            {
+                AddCellError(ijc.CustomerID, "CUSTOMERID: CONTAIN INVALID CHARACTERS");
+            }
+            if (!stringHelper.AccountCustomerInValidCharacter(ijc.CreditFacilityAccNum.Data))
+            {
+                AddCellError(ijc.CreditFacilityAccNum, "CREDITFACILITYACCNUM: CONTAIN INVALID CHARACTERS");
+            }
+
+            bool ijcCreditFacilityAccNum = ijc.CreditFacilityAccNum.Errors == null || ijc.CreditFacilityAccNum.Errors.Count == 0;
+            bool ijcNat_id = ijc.NatIDNum.Errors == null || ijc.NatIDNum.Errors.Count == 0;
+            bool ijcCustomerID = ijc.CustomerID.Errors == null || ijc.CustomerID.Errors.Count == 0;
+            bool ijcDateOfBirth = ijc.DateOfBrith.Errors == null || ijc.DateOfBrith.Errors.Count == 0;
+            bool ijcCurrency = ijc.Currency.Errors == null || ijc.Currency.Errors.Count == 0;
+            bool ijcAmount = ijc.Amount.Errors == null || ijc.Amount.Errors.Count == 0;
+
+            ijc.IsPassed = ijcCreditFacilityAccNum && ijcCustomerID && ids[0].Passed && ijcNat_id && ijc.FirstName.Passed && ijc.Surname.Passed && ijcDateOfBirth && ijcCurrency && ijcAmount;
+            return ijc.IsPassed;
         }
         return false;
     }

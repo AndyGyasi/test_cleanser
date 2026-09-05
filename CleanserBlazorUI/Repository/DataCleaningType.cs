@@ -9,6 +9,8 @@ public class DataCleaningType
             new DataCleaningTypeModel { Id= 2, IdShortName = "bus",  Title = "2. BUSINESS RECORDS BUS"},
             new DataCleaningTypeModel { Id= 3, IdShortName = "idu",  Title = "3. INDIVIDUAL RECORDS DUD"},
             new DataCleaningTypeModel { Id= 4, IdShortName = "bdu",  Title = "4. BUSINESS RECORDS DUD"},
+            new DataCleaningTypeModel { Id= 5, IdShortName = "iju",  Title = "5. INDIVIDUAL RECORDS (JUD)"},
+            new DataCleaningTypeModel { Id= 6, IdShortName = "bju",  Title = "6. BUSINESS RECORDS (JUD)"},
         };
         return getDataCleanings;
     }
