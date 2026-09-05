@@ -840,34 +840,18 @@ public class IndividualDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data).Trim().Replace(" ", "").ToUpper();
 
-        if (data == "101" || data == "AGRICULTUREFACILITY" || data == "AGRIC" || data == "AGRICULTURE" || data == "P") { data = "P"; }
-        else if (data == "102" || data == "AUTOLOAN" || data == "A") { data = "A"; }
+        // Only these 8 codes have a fixed CreditFacilityType. Every other
+        // code/value, and blanks, default to "P" -- final for individual
+        // files (unlike business, individual files have no bank/non-bank
+        // resolution step downstream).
+        if (data == "102" || data == "AUTOLOAN" || data == "A") { data = "A"; }
         else if (data == "103" || data == "BANKGUARANTEE" || data == "Q") { data = "Q"; }
-        else if (data == "104" || data == "BILLSDISCOUNTED" || data == "P") { data = "P"; }
         else if (data == "106" || data == "CREDITCARD" || data == "C") { data = "C"; }
-        else if (data == "107" || data == "EDUCATIONLOAN" || data == "T") { data = "T"; }
-        else if (data == "108" || data == "HIREPURCHASE" || data == "P") { data = "P"; }
         else if (data == "109" || data == "HOUSINGLOAN" || data == "H") { data = "H"; }
-        else if (data == "110" || data == "LEASING" || data == "P") { data = "P"; }
         else if (data == "111" || data == "LETTEROFCREDIT" || data == "Y") { data = "Y"; }
-        else if (data == "112" || data == "LOANAGAINSTBANKDEPOSIT" || data == "P") { data = "P"; }
-        else if (data == "113" || data == "LOANAGAINSTEMPLOYEEPROVIDENTFUND" || data == "P") { data = "P"; }
-        else if (data == "114" || data == "LOANAGAINSTLIFEINSURANCE" || data == "P") { data = "P"; }
-        else if (data == "115" || data == "LOANAGAINSTSALARY/PAYROLL" || data == "P") { data = "P"; }
-        else if (data == "116" || data == "LOANAGAINSTSHARESANDSECURITIES" || data == "P") { data = "P"; }
-        else if (data == "117" || data == "LOANTOPROFESSIONAL" || data == "P") { data = "P"; }
         else if (data == "118" || data == "MORTGAGE" || data == "H") { data = "H"; }
-        else if (data == "119" || data == "NON-SECUREDLOANS" || data == "NONSECUREDLOANS" || data == "SECUREDLOANS" || data == "P") { data = "P"; }
-        else if (data == "120" || data == "OTHERSECUREDLOANS" || data == "P") { data = "P"; }
         else if (data == "121" || data == "OVERDRAFT" || data == "V") { data = "V"; }
-        else if (data == "122" || data == "PERSONALLOAN" || data == "PERSONAL" || data == "P") { data = "P"; }
-        else if (data == "123" || data == "PLEDGELOAN" || data == "PLEDGE" || data == "P") { data = "P"; }
-        else if (data == "124" || data == "PROPERTYLOAN" || data == "PROPERTY" || data == "P") { data = "P"; }
-        else if (data == "125" || data == "GOVERNMENTLOANS" || data == "GOVERNMENT" || data == "P") { data = "P"; }
-        else if (data == "126" || data == "TERMLOANS" || data == "P") { data = "P"; }
-        else if (data == "127" || data == "TRAVELFINANCE" || data == "TRAVEL" || data == "P") { data = "P"; }
         else if (data == "128" || data == "STUDENTLOAN" || data == "STUDENT" || data == "T") { data = "T"; }
-        else if (data == "129" || data == "MACHINERY" || data == "P") { data = "P"; }
         else
         {
             data = "P";
