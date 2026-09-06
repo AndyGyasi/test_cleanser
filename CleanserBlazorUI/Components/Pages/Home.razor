@@ -7050,6 +7050,10 @@
             bc.ProofOfAddType = proofOfAddType_proofOfAddNum[0];
             bc.ProofOfAddNum = proofOfAddType_proofOfAddNum[1];
 
+            var turnovercurrency_turnoveramount = stringHelper.TurnoverCurrency_TurnoverAmount(bc.Turnovercurrency.Data, bc.Turnoveramount.Data);
+            bc.Turnovercurrency = turnovercurrency_turnoveramount[0];
+            bc.Turnoveramount = turnovercurrency_turnoveramount[1];
+
 
 
             var curlocadd = stringHelper.CleanAddresses(bc.Curlocadd1.Data, bc.Curlocadd2.Data, bc.Curlocadd3.Data, bc.Curlocadd4.Data);
@@ -8290,6 +8294,10 @@
             bcDud.Proofofaddtype = proofOfAddType_proofOfAddNum[0];
             bcDud.Proofofaddnum = proofOfAddType_proofOfAddNum[1];
 
+            var turnovercurrency_turnoveramount = stringHelper.TurnoverCurrency_TurnoverAmount(bcDud.Turnovercurrency.Data, bcDud.Turnoveramount.Data);
+            bcDud.Turnovercurrency = turnovercurrency_turnoveramount[0];
+            bcDud.Turnoveramount = turnovercurrency_turnoveramount[1];
+
 
 
             var curlocadd = stringHelper.CleanAddresses(bcDud.Curlocadd1.Data, bcDud.Curlocadd2.Data, bcDud.Curlocadd3.Data, bcDud.Curlocadd4.Data);
@@ -8595,6 +8603,10 @@
             var proofOfAddType_proofOfAddNum = stringHelper.ProofOfAddType_ProofOfAddNum(bjc.Proofofaddtype.Data, bjc.Proofofaddnum.Data);
             bjc.Proofofaddtype = proofOfAddType_proofOfAddNum[0];
             bjc.Proofofaddnum = proofOfAddType_proofOfAddNum[1];
+
+            var turnovercurrency_turnoveramount = stringHelper.TurnoverCurrency_TurnoverAmount(bjc.Turnovercurrency.Data, bjc.Turnoveramount.Data);
+            bjc.Turnovercurrency = turnovercurrency_turnoveramount[0];
+            bjc.Turnoveramount = turnovercurrency_turnoveramount[1];
 
             var curlocadd = stringHelper.CleanAddresses(bjc.Curlocadd1.Data, bjc.Curlocadd2.Data, bjc.Curlocadd3.Data, bjc.Curlocadd4.Data);
             bjc.Curlocadd1 = curlocadd[0];
