@@ -6,9 +6,13 @@
     <div class="container-fluid">
         <a class="navbar-brand" href="">CleanserBlazorUI</a>
     </div>
-    <div class="container-fluid">
-        <a class="navbar-brand" href="refdata">refdata</a>
-    </div>
+    <AuthorizeView Roles="admin,registrar">
+        <Authorized>
+            <div class="container-fluid">
+                <a class="navbar-brand" href="refdata">refdata</a>
+            </div>
+        </Authorized>
+    </AuthorizeView>
     <AuthorizeView Roles="admin">
         <Authorized>
             <div class="container-fluid">

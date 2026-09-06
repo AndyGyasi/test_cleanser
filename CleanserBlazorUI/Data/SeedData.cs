@@ -11,7 +11,7 @@ public class SeedData
         var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-        string[] roleNames = { "admin", "manager", "superuser", "user", "MustChangePassword", "notallowed" };
+        string[] roleNames = { "admin", "manager", "superuser", "user", "MustChangePassword", "notallowed", "registrar" };
         foreach (var roleName in roleNames)
         {
             if (!await roleManager.RoleExistsAsync(roleName))

@@ -6,9 +6,7 @@
 @inject DataManagementService DataManagementService
 
 
-@* @attribute [Authorize]
-@* <p>Your email is: @authState.User.FindFirst(System.Security.Claims.ClaimTypes.Email).Value</p>  *@
-@*@attribute [Authorize(Policy = "PasswordChanged")] *@
+@attribute [Authorize(Roles = "admin,registrar")]
 
 <style>
     .timer-container {
