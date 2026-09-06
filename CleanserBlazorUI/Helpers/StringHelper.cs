@@ -3845,6 +3845,13 @@ public class StringHelper
         {
             incomeCurrency = string.Empty;
         }
+        // Currency-without-amount gets the currency blanked. Amount-without-
+        // currency is left as-is (no change needed here -- d_income is
+        // computed independently of incomeCurrency above).
+        if (!string.IsNullOrWhiteSpace(incomeCurrency) && string.IsNullOrWhiteSpace(d_income.Data))
+        {
+            incomeCurrency = string.Empty;
+        }
         if (
             (jointOrSoleAcc == "S" || jointOrSoleAcc == "1" || jointOrSoleAcc == "01") &&
             (string.IsNullOrWhiteSpace(noParticipantsInAcc) || noParticipantsInAcc == "0" || noParticipantsInAcc == "1")
@@ -3923,39 +3930,131 @@ public class StringHelper
             return otherIdAndOtherIDType;
         }
     }
-    private readonly string[] ValidProofOfAddType_ProofOfAddNum = { "WAT", "ELE" };
+    /// <summary>
+    /// Valid = purely numeric, OR alphanumeric containing at least one digit
+    /// (letters+digits mixed). Invalid = pure-alphabetic (letters only, no
+    /// digits), empty, or containing any non-alphanumeric character
+    /// (spaces, punctuation, symbols).
+    /// </summary>
+    public bool NumericOrAlphanumericWithDigit(string data)
+    {
+        if (string.IsNullOrWhiteSpace(data))
+        {
+            return false;
+        }
+        if (!Regex.IsMatch(data, @"^[A-Za-z0-9]+$"))
+        {
+            return false;
+        }
+        return data.Any(char.IsDigit);
+    }
+    /// <summary>
+    /// Detects a Ghanaian phone number sitting in a cell that should hold an
+    /// address (or similar free-text field), and blanks it. Skips any cell
+    /// containing a letter -- those are treated as real address text, not a
+    /// misplaced phone number, even if they also contain digits. For
+    /// letter-free cells, non-digit formatting (spaces, dashes, '+',
+    /// parentheses) is stripped before checking the digit string against:
+    /// starts with "233" and length 12; starts with "0" and length 10;
+    /// starts with "2", "3" or "5" and length 9. Non-matching letter-free
+    /// cells (e.g. a plain house number or postal code) are left as-is.
+    /// </summary>
+    public string BlankIfPhoneNumber(string data)
+    {
+        if (string.IsNullOrWhiteSpace(data))
+        {
+            return data;
+        }
+        if (Regex.IsMatch(data, @"[A-Za-z]"))
+        {
+            return data;
+        }
+        string digitsOnly = Regex.Replace(data, @"[^0-9]", "");
+        bool isPhoneNumber =
+            (digitsOnly.StartsWith("233") && digitsOnly.Length == 12) ||
+            (digitsOnly.StartsWith("0") && digitsOnly.Length == 10) ||
+            ((digitsOnly.StartsWith("2") || digitsOnly.StartsWith("3") || digitsOnly.StartsWith("5")) && digitsOnly.Length == 9);
+
+        return isPhoneNumber ? string.Empty : data;
+    }
+    /// <summary>
+    /// Email must contain "@" and a real dot-suffix (e.g. "name@x.com",
+    /// "name@x.co.uk"). Narrow exception: "name@gmail" or "name@yahoo" with
+    /// no suffix at all gets ".com" appended, since those two providers are
+    /// safe to default (Gmail has no other TLD; Yahoo's global default is
+    /// .com) -- every other provider submitted without a suffix is blanked
+    /// rather than guessed, since guessing the wrong one (e.g. one of
+    /// Yahoo's or other providers' country-specific TLDs) would write an
+    /// incorrect email into the record.
+    /// </summary>
+    public CellDataAndStatus CleanEmailAddress(string data)
+    {
+        var cellData = new CellDataAndStatus(data);
+        data = RemoveSystemErroNames(data);
+        if (string.IsNullOrWhiteSpace(data))
+        {
+            cellData.Data = string.Empty;
+            return cellData;
+        }
+        data = Regex.Replace(data, @"^https?://", "", RegexOptions.IgnoreCase);
+        data = data.TrimEnd('/', '\\').Trim();
+
+        string emailPattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+        if (Regex.IsMatch(data, emailPattern))
+        {
+            cellData.Data = data.ToLower();
+            return cellData;
+        }
+
+        string gmailYahooNoSuffixPattern = @"^[^@\s]+@(gmail|yahoo)$";
+        if (Regex.IsMatch(data, gmailYahooNoSuffixPattern, RegexOptions.IgnoreCase))
+        {
+            cellData.Data = (data + ".com").ToLower();
+            return cellData;
+        }
+
+        cellData.Data = string.Empty;
+        return cellData;
+    }
+    /// <summary>
+    /// Currency-without-amount gets the currency blanked; amount-without-
+    /// currency is left as-is. Mirrors the pairing rule already applied to
+    /// IncomeCurrency/Income.
+    /// </summary>
+    private readonly string[] ValidTurnoverCurrency = { "GHS", "USD", "EUR", "GBP", "NGN" };
+    public CellDataAndStatus[] TurnoverCurrency_TurnoverAmount(string turnoverCurrency, string turnoverAmount)
+    {
+        CellDataAndStatus[] result = [new CellDataAndStatus(turnoverCurrency), new CellDataAndStatus(turnoverAmount)];
+
+        turnoverCurrency = turnoverCurrency.ToUpper().Trim().Replace(" ", "");
+        if (!ValidTurnoverCurrency.Contains(turnoverCurrency))
+        {
+            turnoverCurrency = string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(turnoverCurrency) && string.IsNullOrWhiteSpace(turnoverAmount))
+        {
+            turnoverCurrency = string.Empty;
+        }
+
+        result[0].Data = turnoverCurrency;
+        result[1].Data = turnoverAmount;
+        return result;
+    }
     public CellDataAndStatus[] ProofOfAddType_ProofOfAddNum(string proofOfAddType, string proofOfAddNum)
     {
-        string _proofOfAddType = string.Empty;
+        // ProofOfAddType is always blanked. ProofOfAddNum is kept only if
+        // numeric-only or alphanumeric with at least one digit -- pure
+        // letters or anything containing symbols/spaces is blanked.
         proofOfAddNum = proofOfAddNum.Replace(" ", "").ToUpper().Trim();
-        proofOfAddType = proofOfAddType.Replace(" ", "").ToUpper().Trim();
 
-
-        if (proofOfAddType == "WATERBIll" || proofOfAddType == "WATER" || proofOfAddType == "WAT")
-        {
-            _proofOfAddType = "WAT";
-        }
-        if (proofOfAddType == "ELECTRICITYBILL" || proofOfAddType == "ELECTRICITY" || proofOfAddType == "ELE")
-        {
-            _proofOfAddType = "ELE";
-        }
         CellDataAndStatus[] proofOfAddType_ProofOfAddNum = [new CellDataAndStatus(proofOfAddType), new CellDataAndStatus(proofOfAddNum)];
         proofOfAddType_ProofOfAddNum[0].Passed = true;
         proofOfAddType_ProofOfAddNum[1].Passed = true;
-        // Check if OtherIDType is valid and OtherIDNum is not empty
-        if (_proofOfAddType.Length == 3 && proofOfAddNum.Length > 0)
-        {
 
-            proofOfAddType_ProofOfAddNum[0].Data = _proofOfAddType;
-            proofOfAddType_ProofOfAddNum[1].Data = proofOfAddNum;
-            return proofOfAddType_ProofOfAddNum;
-        }
-        else
-        {
-            proofOfAddType_ProofOfAddNum[0].Data = string.Empty;
-            proofOfAddType_ProofOfAddNum[1].Data = string.Empty;
-            return proofOfAddType_ProofOfAddNum;
-        }
+        proofOfAddType_ProofOfAddNum[0].Data = string.Empty;
+        proofOfAddType_ProofOfAddNum[1].Data = NumericOrAlphanumericWithDigit(proofOfAddNum) ? proofOfAddNum : string.Empty;
+        return proofOfAddType_ProofOfAddNum;
     }
     Dictionary<string, string> ValidEmpTypeNormarlise = new Dictionary<string, string>
         {

@@ -305,28 +305,28 @@ public class IndividualDataTransformerDud
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus CurResAddr2(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus CurResAddr3(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus CurResAddr4(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus CurResAddrPostalCode(string data)
@@ -355,28 +355,28 @@ public class IndividualDataTransformerDud
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus PrevResAddr2(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus PrevResAddr3(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus PrevResAddr4(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus PrevResAddrPostalCode(string data)
@@ -413,28 +413,28 @@ public class IndividualDataTransformerDud
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus PostAddrLine2(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus PostAddrLine3(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus PostAddrLine4(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus PostalAddPostCode(string data)
@@ -445,24 +445,7 @@ public class IndividualDataTransformerDud
     }
     public CellDataAndStatus EmailAddress(string data)
     {
-        var cellData = new CellDataAndStatus(data);
-        data = stringHelper.RemoveSystemErroNames(data);
-        if (string.IsNullOrWhiteSpace(data))
-        {
-            cellData.Data = string.Empty;
-            return cellData;
-        }
-        string emailPattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
-        data = Regex.Replace(data, @"^https?://", "", RegexOptions.IgnoreCase);
-        // Remove trailing slashes or backslashes
-        data = data.TrimEnd('/', '\\');
-        bool isemailValid = Regex.IsMatch(data, emailPattern);
-        if (!string.IsNullOrWhiteSpace(data) && isemailValid)
-        {
-            data = data.ToLower();
-        }
-        cellData.Data = data;
-        return cellData;
+        return stringHelper.CleanEmailAddress(data);
     }
     public CellDataAndStatus HomeTel(string data)
     {
@@ -539,7 +522,7 @@ public class IndividualDataTransformerDud
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.NumericOrAlphanumericWithDigit(data) ? data : string.Empty;
         return cellData;
     }
     public CellDataAndStatus EmpName(string data)
@@ -554,28 +537,28 @@ public class IndividualDataTransformerDud
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus EmpAddr2(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus EmpAddr3(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus EmpAddr4(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus EmpAddrPostalCode(string data)

@@ -311,28 +311,28 @@ public class BusinessDataTransformerDud
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus Curlocadd2(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus Curlocadd3(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus Curlocadd4(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus Curlocaddrpostalcode(string data)
@@ -345,28 +345,28 @@ public class BusinessDataTransformerDud
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data.ToUpper();
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data.ToUpper());
         return cellData;
     }
     public CellDataAndStatus Postaddrline2(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus Postaddrline3(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus Postaddrline4(string data)
     {
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
-        cellData.Data = data;
+        cellData.Data = stringHelper.BlankIfPhoneNumber(data);
         return cellData;
     }
     public CellDataAndStatus Postaladdpostcode(string data)
