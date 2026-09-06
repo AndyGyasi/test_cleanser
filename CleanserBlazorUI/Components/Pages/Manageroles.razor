@@ -169,7 +169,7 @@
 
         [Required]
         [Display(Name = "Role")]
-        [AllowedWordsAttribute("admin", "manager", "superuser", "user")]
+        [AllowedWordsAttribute("admin", "manager", "superuser", "user", "registrar")]
         public string NewUserRoles { get; set; } = "";
     }
     public class UserWithRoles
