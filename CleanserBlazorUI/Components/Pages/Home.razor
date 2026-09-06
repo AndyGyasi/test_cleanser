@@ -1902,6 +1902,17 @@
 
                 bool dateOnFile = dbRecords.Any(r => r.DisbursementDate == disbursementDate);
 
+                // ── Store reference canonical name for validation pass ──
+                // Mirrors the IND matcher's Sprint 10 block: if the reference
+                // has a business name on file, record it so the validation
+                // pass can trust names that were accepted in a prior month's
+                // manually-cleaned CLEAN sheet.
+                if (!string.IsNullOrWhiteSpace(dbRecord.Businessname))
+                {
+                    excelRecord.ReferenceCanonicalName =
+                        NormaliseNameSortedTokens(dbRecord.Businessname, string.Empty);
+                }
+
                 if (!dateOnFile && !isOverdraft)
                 {
                     excelRecord.DisburStatus = " THE DISBURSEMENT DATE DOES NOT MATCH THE PREVIOUS SUBMISSION ";
@@ -5644,11 +5655,18 @@
             ws.Cell(rowIndex, 158).Value = businessRow.G4Mobile.Data;
 
             // Warnings column -- set once, regardless of clean/unloadable,
-            // since a warning (e.g. a fuzzy business-name match) can apply
-            // to a record that still passes clean. Mirrors the Individual
-            // side's Warnings column at 180 (Business's is at 160, right
-            // after the Errors column at 159).
-            ws.Cell(rowIndex, 160).Value = businessRow.BusinessNameFuzzyMatchNote ?? string.Empty;
+            // since a warning (e.g. a fuzzy business-name match, or a
+            // reference-trust note) can apply to a record that still passes
+            // clean. Mirrors the Individual side's Warnings column at 180
+            // (Business's is at 160, right after the Errors column at 159).
+            var businessWarningParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(businessRow.BusinessNameFuzzyMatchNote))
+                businessWarningParts.Add(businessRow.BusinessNameFuzzyMatchNote);
+            if (!string.IsNullOrWhiteSpace(businessRow.ReferenceNameTrustNote))
+                businessWarningParts.Add(businessRow.ReferenceNameTrustNote);
+            ws.Cell(rowIndex, 160).Value = businessWarningParts.Count > 0
+                ? string.Join(" | ", businessWarningParts)
+                : string.Empty;
 
             //=======================================END ======================================
             if (!isSlean)
@@ -6869,10 +6887,35 @@
             bc.NameOfComGuarantor4.Data = ConvertBusinessShortFormToLongForm(bc.NameOfComGuarantor4.Data);
 
             var bName = FilterBusinessKeywords(bc.Businessname.Data);
-            if (string.IsNullOrWhiteSpace(bName))
+
+            // EXCEPTION: if this record matched the reference and the name is
+            // consistent with what was previously accepted → trust it (it was
+            // manually reviewed and registered from a prior month's clean),
+            // same mechanism as the IND side.
+            bool businessNameValidatedByReference = false;
+            if (!string.IsNullOrWhiteSpace(bc.ReferenceCanonicalName))
+            {
+                var currentBusinessNameSorted = NormaliseNameSortedTokens(bc.Businessname.Data, string.Empty);
+                if (!string.IsNullOrWhiteSpace(currentBusinessNameSorted) &&
+                    (currentBusinessNameSorted == bc.ReferenceCanonicalName ||
+                     bc.ReferenceCanonicalName.Contains(currentBusinessNameSorted) ||
+                     currentBusinessNameSorted.Contains(bc.ReferenceCanonicalName)))
+                {
+                    businessNameValidatedByReference = true;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(bName) && !businessNameValidatedByReference)
             {
                 bc.Businessname.Passed = false;
                 bc.Businessname.Errors = new List<string>() { " Invalid Business Name " };
+            }
+            else if (businessNameValidatedByReference && string.IsNullOrWhiteSpace(bName))
+            {
+                // Name only passed because of reference trust -- note it in the
+                // WARNING column so associates know why, same as IND.
+                if (string.IsNullOrWhiteSpace(bc.ReferenceNameTrustNote))
+                    bc.ReferenceNameTrustNote = "REFERENCE MATCH — NAME ACCEPTED FROM PREVIOUS CLEAN";
             }
 
             var NCG1 = FilterBusinessKeywords(bc.NameOfComGuarantor1.Data);
@@ -7641,7 +7684,30 @@
                 ic.Surname.Errors = new List<string>() { " NAMES CANNOT CONTAIN SEPECIAL CHARACTER(S) " };
             }
 
-            if (ContainsRestrictedWord(ic.Surname.Data) || ContainsRestrictedWord(ic.FirstName.Data) || ContainsRestrictedWord(ic.MiddleNames.Data))
+            // ── Reference-trust check computed up front ───────────────────────
+            // Moved ahead of ContainsRestrictedWord (below) and the Sprint 8
+            // keyword block further down, so BOTH name-keyword gates respect
+            // it -- previously ContainsRestrictedWord ran before this was
+            // computed, so a trusted name (e.g. "ABED SMART", registered from
+            // a prior month's manually-cleaned CLEAN sheet) could still be
+            // flagged here even though the later check already trusted it.
+            bool nameValidatedByReference = false;
+            if (!string.IsNullOrWhiteSpace(ic.ReferenceCanonicalName))
+            {
+                var currentSortedForReferenceCheck = NormaliseNameSortedTokens(
+                    ic.Surname?.Data ?? string.Empty,
+                    ic.FirstName?.Data ?? string.Empty);
+                // Trust if current name matches or is a subset of reference name
+                if (!string.IsNullOrWhiteSpace(currentSortedForReferenceCheck) &&
+                    (currentSortedForReferenceCheck == ic.ReferenceCanonicalName ||
+                     ic.ReferenceCanonicalName.Contains(currentSortedForReferenceCheck) ||
+                     currentSortedForReferenceCheck.Contains(ic.ReferenceCanonicalName)))
+                {
+                    nameValidatedByReference = true;
+                }
+            }
+
+            if (!nameValidatedByReference && (ContainsRestrictedWord(ic.Surname.Data) || ContainsRestrictedWord(ic.FirstName.Data) || ContainsRestrictedWord(ic.MiddleNames.Data)))
             {
                 ic.Surname.Passed = false; ic.FirstName.Passed = false;
                 ic.Surname.Errors = new List<string>() { " SURNAME AND FIRSTNAME ARE MANDATORY AND SHOULD CONTAIN VALID NAMES " };
@@ -7655,22 +7721,6 @@
             // manually reviewed and cleaned last month).
             var combinedName = $"{ic.Surname.Data} {ic.FirstName.Data} {ic.MiddleNames.Data}".Trim();
             var upperName = combinedName.ToUpperInvariant();
-
-            bool nameValidatedByReference = false;
-            if (!string.IsNullOrWhiteSpace(ic.ReferenceCanonicalName))
-            {
-                var currentSorted = NormaliseNameSortedTokens(
-                    ic.Surname?.Data ?? string.Empty,
-                    ic.FirstName?.Data ?? string.Empty);
-                // Trust if current name matches or is a subset of reference name
-                if (!string.IsNullOrWhiteSpace(currentSorted) &&
-                    (currentSorted == ic.ReferenceCanonicalName ||
-                     ic.ReferenceCanonicalName.Contains(currentSorted) ||
-                     currentSorted.Contains(ic.ReferenceCanonicalName)))
-                {
-                    nameValidatedByReference = true;
-                }
-            }
 
             if (!nameValidatedByReference)
             {

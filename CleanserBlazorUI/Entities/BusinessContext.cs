@@ -12,6 +12,19 @@ public class BusinessContext
     /// clean), but worth a note distinct from a hard error.
     /// </summary>
     public string? BusinessNameFuzzyMatchNote { get; set; }
+    // ── Reference name trust (mirrors IndividualContext) ───────────────────
+    /// <summary>
+    /// Canonical business name from the reference DB for this record's
+    /// CreditFacilityAccNum+CustomerID. If set, the validation pass uses it
+    /// to bypass the business-keyword ("Invalid Business Name") check when
+    /// the current Businessname matches or is a subset of the reference name.
+    /// </summary>
+    public string? ReferenceCanonicalName { get; set; } = null;
+    /// <summary>
+    /// Set when the business name was accepted based on reference trust.
+    /// Written to the WARNING column.
+    /// </summary>
+    public string? ReferenceNameTrustNote { get; set; } = null;
     /// <summary>Set to "UNL" when the same AccNum+CustomerID appears with a
     /// different DisbursementDate elsewhere in the same submission -- exempted
     /// for overdraft facilities (CreditFacilityType == "V"), which legitimately
