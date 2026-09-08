@@ -1834,18 +1834,35 @@
 
         if (handleDuplicates)
         {
-            var seenKeys = new HashSet<(string, string, string?)>();
+            var seenKeys = new Dictionary<(string, string, string?), BusinessContext>();
             processedExcelRecords = new List<BusinessContext>();
             foreach (var record in fromExcelFile)
             {
                 var key = (NormalizeAccountNumber(record.Facilityaccnum?.Data), NormalizeCustomerId(record.CustomerID?.Data), record.DisbursementDate?.Data);
-                if (seenKeys.Contains(key))
+                if (seenKeys.TryGetValue(key, out var existing))
                 {
+                    // Before treating this as a duplicate to collapse, confirm
+                    // it's actually the same business -- the key alone
+                    // (AccNum+CustomerID+DisbursementDate) doesn't guarantee
+                    // that. Reuses the exact same fuzzy business-name judgment
+                    // already trusted for the cross-record conflict check.
+                    bool namesConfirmSame = NamesConfirmSameBusiness(new[] { existing, record }, out _);
+                    if (!namesConfirmSame)
+                    {
+                        // Not a duplicate -- a genuine identity conflict on the
+                        // same facility. Let it through untouched so
+                        // CheckForChangesInCustomerIDBusregnumTinum downstream
+                        // sees the full group and flags every one of them for
+                        // UNL, instead of one surviving as CLEAN while the rest
+                        // silently vanish into the DUP sheet.
+                        processedExcelRecords.Add(record);
+                        continue;
+                    }
                     duplicatesList.Add(record); // Duplicates stored separately //
                 }
                 else
                 {
-                    seenKeys.Add(key);
+                    seenKeys[key] = record;
                     processedExcelRecords.Add(record); // Processed records exclude duplicates
                 }
             }
@@ -1936,6 +1953,59 @@
 
         return (processedExcelRecords, duplicatesList, "N/A", "N/A", __matchdata.ToString(), __newdata.ToString(), duplicatesList.Count.ToString());
     }
+    // Whether the group's business names confirm this is clearly the same
+    // business. A business can legitimately have several Customer IDs and
+    // even a corrected registration number/TIN over time -- none of that
+    // is inherently suspicious. What actually matters is whether a shared
+    // ID value belongs to a genuinely different business. Business names
+    // vary far more than person names (trading name vs registered name,
+    // "LTD" vs "LIMITED", punctuation), so this compares fuzzily -- the
+    // same hyphen/apostrophe/comma-tolerant token matching built for
+    // individual names -- rather than requiring exact string equality,
+    // which was the dominant cause of false-positive UNL flags here.
+    // Zero names to check, or genuinely (fuzzy) different names -> can't
+    // confirm -- stay conservative.
+    //
+    // Abbreviations (e.g. "SCH" for "SCHOOL", "INT'L" for
+    // "INTERNATIONAL") are expanded via the same Business Names
+    // Normalizer mappings used for keyword validation BEFORE comparing --
+    // otherwise "ASSOCIATION INTERNATIONAL SCHOOL" vs "...SCH" would fail
+    // plain token-overlap matching despite clearly being the same
+    // business. matchedViaFuzzy reports whether any pair only agreed
+    // after this fuzzy comparison (not an exact string match), so callers
+    // can surface a warning rather than treating it as a silent pass.
+    //
+    // Class-level (not a local function) so both the cross-record conflict
+    // check (CheckForChangesInCustomerIDBusregnumTinum) and the dedup pass
+    // (REF_MainMatcherTransformerInd_Clean_BUS) can reuse the exact same
+    // "is this the same business" judgment.
+    bool NamesConfirmSameBusiness(IEnumerable<BusinessContext> grp, out bool matchedViaFuzzy)
+    {
+        matchedViaFuzzy = false;
+        string NormReg(string? v) => (v ?? string.Empty).Trim().ToUpperInvariant();
+        var distinctNames = grp
+            .Where(r => r.Businessname != null && !string.IsNullOrWhiteSpace(r.Businessname.Data))
+            .Select(r => NormReg(r.Businessname.Data))
+            .Distinct()
+            .ToList();
+
+        if (distinctNames.Count == 0) return false;
+        if (distinctNames.Count == 1) return true;
+
+        var expandedNames = distinctNames.Select(n => ConvertBusinessShortFormToLongForm(n)).ToList();
+
+        for (int i = 0; i < expandedNames.Count; i++)
+            for (int j = i + 1; j < expandedNames.Count; j++)
+            {
+                if (string.Equals(expandedNames[i], expandedNames[j], StringComparison.OrdinalIgnoreCase))
+                    continue; // exact match once abbreviations are expanded
+
+                var (_, _, isSame, _) = CompareNameTokens(expandedNames[i], string.Empty, string.Empty, expandedNames[j], string.Empty, string.Empty);
+                if (!isSame) return false;
+                matchedViaFuzzy = true;
+            }
+        return true;
+    }
     List<BusinessContext> CheckForChangesInCustomerIDBusregnumTinum(List<BusinessContext> list)
     {
         if (list == null)
@@ -1958,53 +2028,9 @@
         // visible even though it isn't treated as a real conflict.
         string NormRegStrict(string? v) => new string(NormReg(v).Where(char.IsLetterOrDigit).ToArray());
 
-        // Whether the group's business names confirm this is clearly the same
-        // business. A business can legitimately have several Customer IDs and
-        // even a corrected registration number/TIN over time -- none of that
-        // is inherently suspicious. What actually matters is whether a shared
-        // ID value belongs to a genuinely different business. Business names
-        // vary far more than person names (trading name vs registered name,
-        // "LTD" vs "LIMITED", punctuation), so this compares fuzzily -- the
-        // same hyphen/apostrophe/comma-tolerant token matching built for
-        // individual names -- rather than requiring exact string equality,
-        // which was the dominant cause of false-positive UNL flags here.
-        // Zero names to check, or genuinely (fuzzy) different names -> can't
-        // confirm -- stay conservative.
-        //
-        // Abbreviations (e.g. "SCH" for "SCHOOL", "INT'L" for
-        // "INTERNATIONAL") are expanded via the same Business Names
-        // Normalizer mappings used for keyword validation BEFORE comparing --
-        // otherwise "ASSOCIATION INTERNATIONAL SCHOOL" vs "...SCH" would fail
-        // plain token-overlap matching despite clearly being the same
-        // business. matchedViaFuzzy reports whether any pair only agreed
-        // after this fuzzy comparison (not an exact string match), so callers
-        // can surface a warning rather than treating it as a silent pass.
-        bool NamesConfirmSameBusiness(IEnumerable<BusinessContext> grp, out bool matchedViaFuzzy)
-        {
-            matchedViaFuzzy = false;
-            var distinctNames = grp
-                .Where(r => r.Businessname != null && !string.IsNullOrWhiteSpace(r.Businessname.Data))
-                .Select(r => NormReg(r.Businessname.Data))
-                .Distinct()
-                .ToList();
-
-            if (distinctNames.Count == 0) return false;
-            if (distinctNames.Count == 1) return true;
-
-            var expandedNames = distinctNames.Select(n => ConvertBusinessShortFormToLongForm(n)).ToList();
-
-            for (int i = 0; i < expandedNames.Count; i++)
-                for (int j = i + 1; j < expandedNames.Count; j++)
-                {
-                    if (string.Equals(expandedNames[i], expandedNames[j], StringComparison.OrdinalIgnoreCase))
-                        continue; // exact match once abbreviations are expanded
-
-                    var (_, _, isSame, _) = CompareNameTokens(expandedNames[i], string.Empty, string.Empty, expandedNames[j], string.Empty, string.Empty);
-                    if (!isSame) return false;
-                    matchedViaFuzzy = true;
-                }
-            return true;
-        }
+        // NamesConfirmSameBusiness is now a class-level method (see below) so
+        // the dedup pass in REF_MainMatcherTransformerInd_Clean_BUS can reuse
+        // it too, not just this check.
 
         // Values like "0000", "STAFF", "VOTERS" are placeholders/category
         // labels, not real registration numbers or TINs -- mirrors the
@@ -2832,7 +2858,15 @@
 
             if (nameConflict)
             {
-                string flag = misspellBlocking ? "E:MISSPELL" : "E";
+                var conflictingNames = records
+                    .Select(r => $"{(r.Surname?.Data ?? string.Empty)} {(r.FirstName?.Data ?? string.Empty)}".Trim())
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .Distinct()
+                    .ToList();
+                var namesJoined = string.Join(", ", conflictingNames);
+                var custIdDisplay = (records[0].CustomerID?.Data ?? string.Empty).Trim();
+                string flagCode = misspellBlocking ? "E:MISSPELL" : "E";
+                string flag = $"{flagCode}||{custIdDisplay}||{namesJoined}";
                 foreach (var r in records) r.SameCustomerIDDifferentName = flag;
             }
             else if (misspellFormatting)
@@ -3340,6 +3374,29 @@
                 if (seenKeys.TryGetValue(key, out var existing) &&
                     string.IsNullOrWhiteSpace(record.DuplicateDoBIssues) && !isOverdraft)
                 {
+                    // Before treating this as a duplicate to collapse, confirm
+                    // it's actually the same person -- the key alone
+                    // (AccNum+CustomerID+DisbursementDate) doesn't guarantee
+                    // that. Same tolerance as the rest of the name-conflict
+                    // logic: CompareNameTokens' own "at least two matching
+                    // tokens" rule.
+                    var (_, _, namesSame, _) = CompareNameTokens(
+                        existing.Surname?.Data ?? string.Empty, existing.FirstName?.Data ?? string.Empty, existing.MiddleNames?.Data ?? string.Empty,
+                        record.Surname?.Data ?? string.Empty, record.FirstName?.Data ?? string.Empty, record.MiddleNames?.Data ?? string.Empty);
+
+                    if (!namesSame)
+                    {
+                        // Not a duplicate -- a genuine identity conflict on the
+                        // same facility. Let it through untouched (don't add to
+                        // duplicatesList, don't touch seenKeys) so
+                        // RunAllCrossRecordChecksIND downstream sees the full
+                        // group and flags every one of them for UNL, instead of
+                        // one surviving as CLEAN while the rest silently vanish
+                        // into the DUP sheet.
+                        processedExcelRecords.Add(record);
+                        continue;
+                    }
+
                     // Duplicate found — compare CurBal to decide which to keep
                     decimal? incomingBal = ParseCurBal(record.CurBal?.Data);
                     decimal? existingBal = ParseCurBal(existing.CurBal?.Data);
@@ -8190,13 +8247,23 @@
             if (!string.IsNullOrWhiteSpace(ic.SameCustomerIDDifferentName) &&
                 ic.SameCustomerIDDifferentName.StartsWith("E"))
             {
-                bool misspell14 = ic.SameCustomerIDDifferentName.Contains("MISSPELL");
+                var flagParts = ic.SameCustomerIDDifferentName.Split(new[] { "||" }, StringSplitOptions.None);
+                var flagCode = flagParts[0];
+                var custIdInConflict = flagParts.Length > 1 ? flagParts[1] : string.Empty;
+                var namesInConflict = flagParts.Length > 2 ? flagParts[2] : string.Empty;
+                bool misspell14 = flagCode.Contains("MISSPELL");
                 string prevNameNote14 = !string.IsNullOrWhiteSpace(ic.PreviousNameOnFile)
                     ? $" — PREVIOUS NAME ON FILE: {ic.PreviousNameOnFile}"
                     : string.Empty;
+                string nameListNote14 = !string.IsNullOrWhiteSpace(namesInConflict)
+                    ? $" — NAMES ON FILE: {namesInConflict}"
+                    : string.Empty;
+                string custIdNote14 = !string.IsNullOrWhiteSpace(custIdInConflict)
+                    ? $" (CUSTOMER ID {custIdInConflict})"
+                    : string.Empty;
                 string msg = misspell14
-                    ? $"CUSTOMER ID CONFLICT: NAME PARTIALLY MATCHES — POSSIBLE MISSPELLING — MANUAL REVIEW REQUIRED{prevNameNote14}"
-                    : $"CUSTOMER ID CONFLICT: SAME CUSTOMER ID IS LINKED TO DIFFERENT NAMES ACROSS RECORDS{prevNameNote14}";
+                    ? $"CUSTOMER ID CONFLICT{custIdNote14}: NAME PARTIALLY MATCHES — POSSIBLE MISSPELLING — MANUAL REVIEW REQUIRED{prevNameNote14}{nameListNote14}"
+                    : $"CUSTOMER ID CONFLICT{custIdNote14}: SAME CUSTOMER ID IS LINKED TO DIFFERENT NAMES ACROSS RECORDS{prevNameNote14}{nameListNote14} — VERIFY WHICH IS CORRECT";
                 AddCellError(ic.CustomerID, msg);
                 AddCellError(ic.Surname, msg);
             }
