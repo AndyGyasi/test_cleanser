@@ -2,6 +2,20 @@
 bin/
 obj/
 out/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
 
 # ── .NET ──────────────────────────────────────────────
 *.user
@@ -26,6 +40,9 @@ project.fragment.lock.json
 artifacts/
 packages/
 
+# ── ASP.NET Scaffolding ────────────────────────────────
+ScaffoldingReadMe.txt
+
 # ── Blazor / WASM ─────────────────────────────────────
 wwwroot/_framework/
 
@@ -35,6 +52,17 @@ wwwroot/_framework/
 *.temp
 Logs/
 logs/
+CodeCoverage/
+
+# ── MSBuild / test tooling ─────────────────────────────
+*.binlog
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+~$*
+*~
 
 # ── Secrets / config overrides ────────────────────────
 appsettings.Development.json
@@ -42,6 +70,7 @@ appsettings.Local.json
 secrets.json
 *.pfx
 *.p12
+.env
 
 # ── OS ────────────────────────────────────────────────
 .DS_Store
