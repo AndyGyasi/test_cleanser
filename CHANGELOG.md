@@ -113,7 +113,7 @@ Not scheduled yet — noted here so it isn't lost, not because it's next.
   app's core work — Excel parsing, EF Core, direct DB/file access — is
   inherently server-side; a JS frontend would mean building and maintaining a
   full API layer on top of everything, for a UI reskin). Full redesign in
-  scope (not just the daily-use screens), theme explicitly NOT AB3 branding —
+  scope (not just the daily-use screens), theme explicitly NOT XDS branding —
   to be specified later. Plan when we get there: agree on information
   architecture first, extract business logic out of `Home.razor` into
   services (valuable independent of the visual redesign too), then rebuild

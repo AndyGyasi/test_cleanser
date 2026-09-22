@@ -1,8 +1,8 @@
 # Cleanser App (`clnsr_prjct`)
 
-**AB3 Credit Bureau — Data Cleanser Tool**
+**XDS Credit Bureau — Data Cleanser Tool**
 
-A C# / ASP.NET Blazor (.NET 9) application that validates, normalises, and prepares financial and credit records submitted by subscriber institutions before loading into the AB3 credit bureau system.
+A C# / ASP.NET Blazor (.NET 9) application that validates, normalises, and prepares financial and credit records submitted by subscriber institutions before loading into the XDS credit bureau system.
 
 ---
 
@@ -125,7 +125,7 @@ All known issues, severity ratings, priority levels, and resolution status are m
 
 ```bash
 # 1. Clone
-git clone https://github.com/XAb3d/clnsr_prjct.git
+git clone https://github.com/XXDSd/clnsr_prjct.git
 cd clnsr_prjct
 
 # 2. Restore dependencies (restores every project in CleanserProject.sln)
@@ -185,4 +185,4 @@ dotnet run --project CleanserMonitor/CleanserMonitor.AppHost
 
 ---
 
-*Maintained by AB3 Data Operations.*
+*Maintained by XDS Data Operations.*

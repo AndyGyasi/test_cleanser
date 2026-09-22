@@ -39,7 +39,7 @@
     <!-- Email Field -->
     <div>
         <label>
-            <InputText placeholder="example@AB3data.com" disabled="@isDisabled" @bind-Value="Input.Email" class="form-control py-4" style="width: 535px" aria-required="true" />
+            <InputText placeholder="example@XDSdata.com" disabled="@isDisabled" @bind-Value="Input.Email" class="form-control py-4" style="width: 535px" aria-required="true" />
         </label>
     </div>
     <div class="py-2 bg-transparent"></div>
@@ -60,7 +60,7 @@
 
     <MudGrid Style="min-width: 100%">
         <MudItem lg="11">
-            @if (bs.Email == "noreply.AB3monitor@AB3datagh.com")
+            @if (bs.Email == "noreply.XDSmonitor@XDSdatagh.com")
             {
                 @if (bs.Roles.Count > 0)
                 {
@@ -124,7 +124,7 @@
     private async Task DeleteUser(UserWithRoles user)
     {
         var identityUser = await UserManager.FindByNameAsync(user.Email);
-        if (identityUser != null && identityUser.Email != "noreply.AB3monitor@AB3datagh.com")
+        if (identityUser != null && identityUser.Email != "noreply.XDSmonitor@XDSdatagh.com")
         {
             await UserManager.DeleteAsync(identityUser);
         }

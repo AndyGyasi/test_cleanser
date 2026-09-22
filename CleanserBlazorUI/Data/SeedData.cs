@@ -21,7 +21,7 @@ public class SeedData
         }
 
         // Create admin user
-        var adminEmail = "noreply.AB3monitor@AB3datagh.com";
+        var adminEmail = "noreply.XDSmonitor@XDSdatagh.com";
         var adminUser = await userManager.FindByEmailAsync(adminEmail);
         if (adminUser == null)
         {

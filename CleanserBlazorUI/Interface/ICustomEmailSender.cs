@@ -95,7 +95,7 @@ public class EmailSender : ICustomEmailSender
 //  <div class=""email-container"">
 //    <div class=""header"">
 //      <!-- Reference the inline image using cid:logoImage -->
-//      <img src=""cid:logoImage"" alt=""AB3data Ghana Logo"" style=""max-width: 220px; height: auto;"">
+//      <img src=""cid:logoImage"" alt=""XDSdata Ghana Logo"" style=""max-width: 220px; height: auto;"">
 //    </div>
 //    <div class=""content"">
 //      <h1 style=""font-size: 28px; color: #1e293b; margin-bottom: 20px;"">Hello {theUser},</h1>
@@ -106,8 +106,8 @@ public class EmailSender : ICustomEmailSender
 //    </div>
 //    <div class=""divider""></div>
 //    <div class=""footer"">
-//      <p>Need help? Contact <a href=""mailto:noreply.AB3monitor@AB3datagh.com"">noreply.AB3monitor@AB3datagh.com</a>.</p>
-//      <p>&copy; {DateTime.Now.Year} AB3 DATA GHANA. All rights reserved.</p>
+//      <p>Need help? Contact <a href=""mailto:noreply.XDSmonitor@XDSdatagh.com"">noreply.XDSmonitor@XDSdatagh.com</a>.</p>
+//      <p>&copy; {DateTime.Now.Year} XDS DATA GHANA. All rights reserved.</p>
 //    </div>
 //  </div>
 //</body>
@@ -231,7 +231,7 @@ public class EmailSender : ICustomEmailSender
   <div class=""email-container"">
     <div class=""header"">
       <!-- Reference the inline image using cid:logoImage -->
-      <img src=""cid:logoImage"" alt=""AB3data Ghana Logo"" style=""max-width: 220px; height: auto;"">
+      <img src=""cid:logoImage"" alt=""XDSdata Ghana Logo"" style=""max-width: 220px; height: auto;"">
     </div>
     <div class=""content"">
       <h1 style=""font-size: 28px; color: #1e293b; margin-bottom: 20px;"">Hello {theUser},</h1>
@@ -257,8 +257,8 @@ public class EmailSender : ICustomEmailSender
     </div>
     <div class=""divider""></div>
     <div class=""footer"">
-      <p>Need help? Contact <a href=""mailto:noreply.AB3monitor@AB3datagh.com"">noreply.AB3monitor@AB3datagh.com</a>.</p>
-      <p>&copy; {DateTime.Now.Year} AB3 DATA GHANA. All rights reserved.</p>
+      <p>Need help? Contact <a href=""mailto:noreply.XDSmonitor@XDSdatagh.com"">noreply.XDSmonitor@XDSdatagh.com</a>.</p>
+      <p>&copy; {DateTime.Now.Year} XDS DATA GHANA. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -396,7 +396,7 @@ public class EmailSender : ICustomEmailSender
   <div class=""email-container"">
     <div class=""header"">
       <!-- Reference the inline image using cid:logoImage -->
-      <img src=""cid:logoImage"" alt=""AB3data Ghana Logo"" style=""max-width: 220px; height: auto;"">
+      <img src=""cid:logoImage"" alt=""XDSdata Ghana Logo"" style=""max-width: 220px; height: auto;"">
     </div>
     <div class=""content"">
       <h1 style=""font-size: 28px; color: #1e293b; margin-bottom: 20px;"">Hello {theUser},</h1>
@@ -407,8 +407,8 @@ public class EmailSender : ICustomEmailSender
     </div>
     <div class=""divider""></div>
     <div class=""footer"">
-      <p>Need help? Contact <a href=""mailto:noreply.AB3monitor@AB3datagh.com"">noreply.AB3monitor@AB3datagh.com</a>.</p>
-      <p>&copy; {DateTime.Now.Year} AB3 DATA GHANA. All rights reserved.</p>
+      <p>Need help? Contact <a href=""mailto:noreply.XDSmonitor@XDSdatagh.com"">noreply.XDSmonitor@XDSdatagh.com</a>.</p>
+      <p>&copy; {DateTime.Now.Year} XDS DATA GHANA. All rights reserved.</p>
     </div>
   </div>
 </body>
