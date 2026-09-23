@@ -356,7 +356,7 @@
         var _spreadsheetFileAndChipColor = spreadsheetFileAndChipColor.Select(passed => passed.IsPassed).ToList();
         foreach (var item in spreadsheetFileAndChipColor)
         {
-            await REF_GetSpreadsheetData(item.SpreadsheetFile, id);
+            await REF_GetSpreadsheetData(item, id);
         }
         numberOfPassedCount = $"Passed Files ({passedRecord.Count})";
         numberOffailedCount = failedRecord.Count.ToString();
@@ -401,7 +401,7 @@
         var _spreadsheetFileAndChipColor = spreadsheetFileAndChipColor.Where(passed => passed.IsPassed == true).ToList();
         foreach (var item in _spreadsheetFileAndChipColor)
         {
-            await INSERTREF_REF_GetSpreadsheetData(item.SpreadsheetFile);
+            await INSERTREF_REF_GetSpreadsheetData(item);
         }
         numberOfPassedCount = $"Passed Files ({passedRecord.Count})";
         numberOffailedCount = failedRecord.Count.ToString();
@@ -505,8 +505,9 @@
         AlertSeverityVisible = "d-block";
         StateHasChanged();
     }
-    async Task<CleaningStatus> REF_GetSpreadsheetData(IBrowserFile browserFile, int id)
+    async Task<CleaningStatus> REF_GetSpreadsheetData(SpreadsheetFileAndChipColor fileItem, int id)
     {
+        var browserFile = fileItem.SpreadsheetFile;
         StreamHelper streamHelper = new();
         if (id == 1)
         {
@@ -524,19 +525,23 @@
                     // Ensure the directory exists
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
 
-                    // Stream the uploaded file
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-
-                    // Generate a secure random file name
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-
-
-                    // Combine directory with the sanitized file name and extension
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));// made of of directory and file name
-                    //ExcelDataRecieved.Clear();
-                    //SpreadSheetStatus = new();
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    // Already saved to disk by the plain-HTTP upload endpoint at
+                    // selection time (see REF_FileUpload) -- only falls back to the
+                    // old OpenReadStream-over-SignalR path if that upload didn't
+                    // happen for this file (e.g. the endpoint was unreachable).
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath))
+                    {
+                        FullExcelDataFilePath = fileItem.TempFilePath;
+                    }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
 
                     var (ExcelDataRecieved, SpreadSheetStatus) = await REFReadFromExcelAsync<DBIndividualContext>(destinationStream, "ind", FileName);
 
@@ -597,19 +602,23 @@
                     // Ensure the directory exists
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
 
-                    // Stream the uploaded file
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-
-                    // Generate a secure random file name
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-
-
-                    // Combine directory with the sanitized file name and extension
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));// made of of directory and file name
-                    //ExcelDataRecieved.Clear();
-                    //SpreadSheetStatus = new();
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    // Already saved to disk by the plain-HTTP upload endpoint at
+                    // selection time (see REF_FileUpload) -- only falls back to the
+                    // old OpenReadStream-over-SignalR path if that upload didn't
+                    // happen for this file (e.g. the endpoint was unreachable).
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath))
+                    {
+                        FullExcelDataFilePath = fileItem.TempFilePath;
+                    }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
 
 
                     var (ExcelDataRecieved, SpreadSheetStatus) = await REFReadFromExcelAsync<DBBusinessContext>(destinationStream, "bus", FileName);
@@ -656,8 +665,9 @@
         }
         return new CleaningStatus();
     }
-    async Task<CleaningStatus> INSERTREF_REF_GetSpreadsheetData(IBrowserFile browserFile)
+    async Task<CleaningStatus> INSERTREF_REF_GetSpreadsheetData(SpreadsheetFileAndChipColor fileItem)
     {
+        var browserFile = fileItem.SpreadsheetFile;
         StreamHelper streamHelper = new();
         if (expandPanelSelectedOption == "ind")
         {
@@ -676,19 +686,23 @@
                     // Ensure the directory exists
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
 
-                    // Stream the uploaded file
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-
-                    // Generate a secure random file name
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-
-
-                    // Combine directory with the sanitized file name and extension
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));// made of of directory and file name
-                    //ExcelDataRecieved.Clear();
-                    //SpreadSheetStatus = new();
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    // Already saved to disk by the plain-HTTP upload endpoint at
+                    // selection time (see REF_FileUpload) -- only falls back to the
+                    // old OpenReadStream-over-SignalR path if that upload didn't
+                    // happen for this file (e.g. the endpoint was unreachable).
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath))
+                    {
+                        FullExcelDataFilePath = fileItem.TempFilePath;
+                    }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
                     var (ExcelDataRecieved, SpreadSheetStatus) = await REFReadFromExcelAsync<DBIndividualContext>(destinationStream, FileName, "ind");
 
                     //ReadFromExcel(destinationStream, out ExcelDataRecieved, out SpreadSheetStatus);
@@ -750,19 +764,23 @@
                     // Ensure the directory exists
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
 
-                    // Stream the uploaded file
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-
-                    // Generate a secure random file name
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-
-
-                    // Combine directory with the sanitized file name and extension
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));// made of of directory and file name
-                    //ExcelDataRecieved.Clear();
-                    //SpreadSheetStatus = new();
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    // Already saved to disk by the plain-HTTP upload endpoint at
+                    // selection time (see REF_FileUpload) -- only falls back to the
+                    // old OpenReadStream-over-SignalR path if that upload didn't
+                    // happen for this file (e.g. the endpoint was unreachable).
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath))
+                    {
+                        FullExcelDataFilePath = fileItem.TempFilePath;
+                    }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
                     var (ExcelDataRecieved, SpreadSheetStatus) = await REFReadFromExcelAsync<DBBusinessContext>(destinationStream, FileName, "bus");
 
                     //ReadFromExcel(destinationStream, out ExcelDataRecieved, out SpreadSheetStatus);
@@ -825,7 +843,22 @@
         isLoading = true;
         GetErrorsPairsList.Clear();
 
+        // Upload straight to disk over plain HTTP, bypassing the SignalR circuit's
+        // small message-size ceiling that OpenReadStream() would otherwise hit on
+        // real Excel files. Empty array falls back to per-file OpenReadStream
+        // further down the pipeline if the upload endpoint couldn't be reached.
+        string[] tempPaths;
+        try
+        {
+            tempPaths = await JS.InvokeAsync<string[]>("uploadSelectedFiles", DropZone, "/api/uploads/spreadsheets");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Bulk file upload to /api/uploads/spreadsheets failed; falling back to per-file streaming.");
+            tempPaths = Array.Empty<string>();
+        }
 
+        int fileIndex = 0;
         foreach (var browserFile in e.GetMultipleFiles(MAX_FILES))
         {
             try
@@ -833,15 +866,16 @@
                 var bbb = stringHelper.GetBusinessTypeFromFile(browserFile.Name);
                 var shortname = await DataManagementService.GetShortCodefromReferencing(browserFile.Name, stringHelper.GetBusinessTypeFromFile(browserFile.Name).ToLower());
                 var extension = Path.GetExtension(browserFile.Name);
+                var tempPath = fileIndex < tempPaths.Length ? tempPaths[fileIndex] : null;
                 // if (browserFile != null && extension == ".xlsx" && await REF_CheckFileNamesAllowed(browserFile))
                 //if (browserFile != null && extension == ".xlsx")
                 if (browserFile != null && extension == ".xlsx" && !string.IsNullOrWhiteSpace(shortname))
                 {
-                    spreadsheetFileAndChipColor.Add(new SpreadsheetFileAndChipColor { SpreadsheetFile = browserFile, SpreadsheetFileColor = Color.Primary, IsPassed = true });
+                    spreadsheetFileAndChipColor.Add(new SpreadsheetFileAndChipColor { SpreadsheetFile = browserFile, SpreadsheetFileColor = Color.Primary, IsPassed = true, TempFilePath = tempPath });
                 }
                 else
                 {
-                    spreadsheetFileAndChipColor.Add(new SpreadsheetFileAndChipColor { SpreadsheetFile = browserFile, SpreadsheetFileColor = Color.Error, IsPassed = false });
+                    spreadsheetFileAndChipColor.Add(new SpreadsheetFileAndChipColor { SpreadsheetFile = browserFile, SpreadsheetFileColor = Color.Error, IsPassed = false, TempFilePath = tempPath });
                     numberofFileswithoutreference++;
                 }
             }
@@ -849,7 +883,10 @@
             {
                 Logger.LogError(ex, "Error processing file {FileName}", browserFile.Name);
             }
-
+            finally
+            {
+                fileIndex++;
+            }
         }
         if (numberofFileswithoutreference > 0)
         {
@@ -3652,8 +3689,9 @@
     }
  
     
-    async Task<CleaningStatus> GetSpreadsheetDataNew(IBrowserFile browserFile, int id)
+    async Task<CleaningStatus> GetSpreadsheetDataNew(SpreadsheetFileAndChipColor fileItem, int id)
     {
+        var browserFile = fileItem.SpreadsheetFile;
         StreamHelper streamHelper = new();
         if (id == 1)
         {
@@ -3671,17 +3709,23 @@
                     // Ensure the directory exists
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
 
-                    // Stream the uploaded file
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-
-                    // Generate a secure random file name
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-
-
-                    // Combine directory with the sanitized file name and extension
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));// made of of directory and file name
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    // Already saved to disk by the plain-HTTP upload endpoint at
+                    // selection time (see REF_FileUpload) -- only falls back to the
+                    // old OpenReadStream-over-SignalR path if that upload didn't
+                    // happen for this file (e.g. the endpoint was unreachable).
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath))
+                    {
+                        FullExcelDataFilePath = fileItem.TempFilePath;
+                    }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
 
                     var (ExcelDataRecieved, SpreadSheetStatus) = await ReadFromExcelAsync<IndividualContext>(destinationStream, FileName);
                     CleanserBlazorUI.DevelopmentFolder.ExtractSpreadSheetHeader.HeaderExtracter(destinationStream);
@@ -3836,19 +3880,23 @@
                     // Ensure the directory exists
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
 
-                    // Stream the uploaded file
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-
-                    // Generate a secure random file name
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-
-
-                    // Combine directory with the sanitized file name and extension
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));// made of of directory and file name
-                    //ExcelDataRecieved.Clear();
-                    //SpreadSheetStatus = new();
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    // Already saved to disk by the plain-HTTP upload endpoint at
+                    // selection time (see REF_FileUpload) -- only falls back to the
+                    // old OpenReadStream-over-SignalR path if that upload didn't
+                    // happen for this file (e.g. the endpoint was unreachable).
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath))
+                    {
+                        FullExcelDataFilePath = fileItem.TempFilePath;
+                    }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
                     // Must happen BEFORE ReadFromExcelAsync<BusinessContext> -- that call is
                     // where each row's "W" sentinel gets resolved to isSubscriber_X_or_Y, so
                     // it needs the correct value for THIS file already set, not a stale one
@@ -3962,11 +4010,16 @@
                     FileName = browserFile.Name; FileSize = browserFile.Size; FileSizeInString = $"{streamHelper.ConvertLongToMB(FileSize).ToString()}MB";
                     string uploadDirectory = Path.Combine(Environment.WebRootPath, UPLOADED_FILE_DIRECTORY);
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath)) { FullExcelDataFilePath = fileItem.TempFilePath; }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
                     var (ExcelDataRecieved, SpreadSheetStatus) = await ReadFromExcelAsync<IndividualContextDud>(destinationStream, FileName);
                     CleanserBlazorUI.DevelopmentFolder.ExtractSpreadSheetHeader.HeaderExtracter(destinationStream);
                     var numberOfHeaderErrors = SpreadSheetStatus.InvalidHeaders.Count;
@@ -4015,11 +4068,16 @@
                     FileName = browserFile.Name; FileSize = browserFile.Size; FileSizeInString = $"{streamHelper.ConvertLongToMB(FileSize).ToString()}MB";
                     string uploadDirectory = Path.Combine(Environment.WebRootPath, UPLOADED_FILE_DIRECTORY);
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));// made of of directory and file name
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath)) { FullExcelDataFilePath = fileItem.TempFilePath; }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
                     var (ExcelDataRecieved, SpreadSheetStatus) = await ReadFromExcelAsync<BusinessContextDud>(destinationStream, FileName);
                     CleanserBlazorUI.DevelopmentFolder.ExtractSpreadSheetHeader.HeaderExtracter(destinationStream);
                     var numberOfHeaderErrors = SpreadSheetStatus.InvalidHeaders.Count;
@@ -4082,11 +4140,16 @@
                     FileName = browserFile.Name; FileSize = browserFile.Size; FileSizeInString = $"{streamHelper.ConvertLongToMB(FileSize).ToString()}MB";
                     string uploadDirectory = Path.Combine(Environment.WebRootPath, UPLOADED_FILE_DIRECTORY);
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath)) { FullExcelDataFilePath = fileItem.TempFilePath; }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
                     var (ExcelDataRecieved, SpreadSheetStatus) = await ReadFromExcelAsync<IndividualJudgementContext>(destinationStream, FileName);
                     CleanserBlazorUI.DevelopmentFolder.ExtractSpreadSheetHeader.HeaderExtracter(destinationStream);
                     var numberOfHeaderErrors = SpreadSheetStatus.InvalidHeaders.Count;
@@ -4135,11 +4198,16 @@
                     FileName = browserFile.Name; FileSize = browserFile.Size; FileSizeInString = $"{streamHelper.ConvertLongToMB(FileSize).ToString()}MB";
                     string uploadDirectory = Path.Combine(Environment.WebRootPath, UPLOADED_FILE_DIRECTORY);
                     if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
-                    using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
-                    var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
-                    FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
-                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Create);
-                    await filestream.CopyToAsync(destinationStream);
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath)) { FullExcelDataFilePath = fileItem.TempFilePath; }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
                     var (ExcelDataRecieved, SpreadSheetStatus) = await ReadFromExcelAsync<BusinessJudgementContext>(destinationStream, FileName);
                     CleanserBlazorUI.DevelopmentFolder.ExtractSpreadSheetHeader.HeaderExtracter(destinationStream);
                     var numberOfHeaderErrors = SpreadSheetStatus.InvalidHeaders.Count;
@@ -4193,7 +4261,7 @@
         var _spreadsheetFileAndChipColor = spreadsheetFileAndChipColor.Select(passed => passed.IsPassed).ToList();
         foreach (var item in spreadsheetFileAndChipColor)
         {
-            await GetSpreadsheetDataNew(item.SpreadsheetFile, id);
+            await GetSpreadsheetDataNew(item, id);
         }
         numberOfPassedCount = $"Passed Files ({passedRecord.Count})";
         numberOffailedCount = failedRecord.Count.ToString();

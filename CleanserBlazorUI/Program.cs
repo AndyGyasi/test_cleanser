@@ -42,6 +42,14 @@ builder.WebHost.ConfigureKestrel(options =>
 {
     options.Limits.MaxRequestBodySize = 1 * 1024 * 1024 * 1024; // 1GB
 });
+// The multipart form parser's own limit is 128MB by default, independent of
+// Kestrel's MaxRequestBodySize above -- raise it to match, so the plain-HTTP
+// spreadsheet upload endpoint (see MapPost("/api/uploads/spreadsheets")) can
+// actually accept files up to that size.
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 1 * 1024 * 1024 * 1024; // 1GB
+});
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -50,6 +58,13 @@ builder.Services.AddRazorComponents()
 builder.Services.Configure<Microsoft.AspNetCore.Components.Server.CircuitOptions>(options =>
 {
     options.DetailedErrors = builder.Environment.IsDevelopment();
+});
+// Default SignalR circuit message size (~32KB) is far smaller than the Excel
+// files InputFile streams over the circuit, silently killing the connection
+// mid-upload. Raise it to match MAX_FILESIZE's realistic usage.
+builder.Services.Configure<Microsoft.AspNetCore.SignalR.HubOptions>(options =>
+{
+    options.MaximumReceiveMessageSize = 250 * 1024 * 1024; // 250MB
 });
 builder.Services.AddMudServices();
 builder.Services.AddCascadingAuthenticationState();
@@ -167,6 +182,39 @@ app.MapRazorComponents<App>()
 
 
 app.MapAdditionalIdentityEndpoints();
+
+// Plain-HTTP upload used by the file dropzones instead of routing bytes
+// through browserFile.OpenReadStream() over the SignalR circuit -- that path
+// has a small message-size ceiling (see HubOptions.MaximumReceiveMessageSize
+// above) and silently kills the circuit on real-world Excel files. This
+// endpoint saves straight to the same "temp" folder/naming convention the
+// Razor components already used, so the rest of the pipeline is unchanged.
+app.MapPost("/api/uploads/spreadsheets", async (HttpRequest request, IWebHostEnvironment env) =>
+{
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest("Expected multipart/form-data.");
+    }
+
+    var form = await request.ReadFormAsync();
+    var uploadDirectory = Path.Combine(env.WebRootPath, "temp");
+    Directory.CreateDirectory(uploadDirectory);
+
+    var savedPaths = new List<string>();
+    foreach (var file in form.Files)
+    {
+        var extension = Path.GetExtension(file.FileName);
+        var randomFileName = $"{Path.GetRandomFileName()}_____{file.FileName}";
+        var savedPath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+
+        await using var destination = new FileStream(savedPath, FileMode.Create);
+        await file.CopyToAsync(destination);
+
+        savedPaths.Add(savedPath);
+    }
+
+    return Results.Ok(new { paths = savedPaths });
+}).RequireAuthorization();
 
 try
 {
