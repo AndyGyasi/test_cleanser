@@ -641,6 +641,10 @@
             }
             catch (Exception)
             {
+                // Otherwise the file just vanishes with no on-screen feedback --
+                // show it as failed instead of silently dropping it.
+                spreadsheetFileAndChipColor.Add(new SpreadsheetFileAndChipColor { SpreadsheetFile = browserFile, SpreadsheetFileColor = Color.Error, IsPassed = false });
+                numberofFileswithoutreference++;
             }
             finally
             {

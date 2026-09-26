@@ -471,23 +471,28 @@ public class DataManagementService
     public async Task<string> GetShortCodefromReferencing(string _filename, string type_Bus_or_ind)
     {
         var _shortcode = await GetFileShortCodeFromFileName(_filename);
-        IndividualRef individualRef = new();
-        BusinessRef businessRef = new();
+        // Project only SubscriberCode instead of materializing the full entity --
+        // a NULL in any other non-nullable column on a matching row (e.g.
+        // DateOfBirth) would otherwise throw here and silently drop the file's
+        // chip, since this call sits inside a per-file try/catch in REF_FileUpload.
         if (type_Bus_or_ind == "ind")
         {
-            individualRef = _context.IndividualsData.FirstOrDefault(s => s.SubscriberCode == _shortcode) ?? new IndividualRef();
-            return individualRef.SubscriberCode ?? string.Empty;
+            return await _context.IndividualsData
+                .Where(s => s.SubscriberCode == _shortcode)
+                .Select(s => s.SubscriberCode)
+                .FirstOrDefaultAsync() ?? string.Empty;
         }
-        else if(type_Bus_or_ind == "bus")
+        else if (type_Bus_or_ind == "bus")
         {
-            businessRef = _context.BusinessesData.FirstOrDefault(s => s.SubscriberCode == _shortcode) ?? new BusinessRef();
-            return businessRef.SubscriberCode ?? string.Empty;
+            return await _context.BusinessesData
+                .Where(s => s.SubscriberCode == _shortcode)
+                .Select(s => s.SubscriberCode)
+                .FirstOrDefaultAsync() ?? string.Empty;
         }
         else
         {
             return string.Empty;
         }
-        
     }
 
 

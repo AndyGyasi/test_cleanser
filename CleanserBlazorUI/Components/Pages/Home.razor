@@ -882,6 +882,11 @@
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error processing file {FileName}", browserFile.Name);
+                // Otherwise the file just vanishes with no on-screen feedback --
+                // exactly what made a real lookup bug here look like a UI/upload
+                // failure. Show it as failed instead of silently dropping it.
+                spreadsheetFileAndChipColor.Add(new SpreadsheetFileAndChipColor { SpreadsheetFile = browserFile, SpreadsheetFileColor = Color.Error, IsPassed = false });
+                numberofFileswithoutreference++;
             }
             finally
             {
@@ -5136,7 +5141,14 @@
             {
                 errorsPair = null;
             }
-            if (i == 2 && actualHeaders[i] == "facilityaccnum") //2
+            if (i == 2 && (actualHeaders[i] == "facilityaccnum" || actualHeaders[i] == "creditfacilityaccnum")) //2
+            {
+                errorsPair = null;
+            }
+            // "1 - Correction Update /" (exact punctuation/dash varies by source file)
+            // is the same field as CorrectionIndicator -- match loosely on the core
+            // words rather than the literal string.
+            if (i == 1 && actualHeaders[i].Contains("correctionupdate"))
             {
                 errorsPair = null;
             }

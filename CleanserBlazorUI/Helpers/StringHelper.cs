@@ -136,12 +136,23 @@ public class StringHelper
     //    }
     //    return string.Join(" ", tokens);
     //}
+    // Filenames encode type as underscore-delimited tokens, and DUD/JUD variants
+    // combine with IND/BUS in either order (e.g. ABSA0124_DUD_IND, ABSA0124_JUD_BUS).
+    // Taking a fixed token index (the old approach) misclassifies every DUD/JUD
+    // file as "DUD"/"JUD" instead of "ind"/"bus", which breaks subscriber-shortcode
+    // lookup for those files regardless of whether the shortcode exists. Scanning
+    // all tokens for an exact IND/BUS match handles every combination uniformly.
     public string GetBusinessTypeFromFile(string _file)
     {
-        string[] file_name_part = _file.Split('_');
-        if (file_name_part.Length > 1)
+        var nameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(_file);
+        var tokens = nameWithoutExtension.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Any(t => string.Equals(t, "IND", StringComparison.OrdinalIgnoreCase)))
         {
-            return file_name_part[1].Replace(".xlsx", "");
+            return "ind";
+        }
+        if (tokens.Any(t => string.Equals(t, "BUS", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "bus";
         }
         return string.Empty;
     }
