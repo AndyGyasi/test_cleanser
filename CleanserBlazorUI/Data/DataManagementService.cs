@@ -59,16 +59,17 @@ public class DataManagementService
             .Where(r => r.SubscriberCode == subscriber)
             .ToListAsync();
 
-        // .ToDictionary() throws "An item with the same key has already been
-        // added" if the reference table has duplicate (AccNum, CustomerID,
-        // DisbursementDate) rows -- which can genuinely happen in the DB.
-        // Build the index manually instead so a duplicate just overwrites
-        // (last one wins) rather than crashing the whole cleaning run.
-        var existingIndex = new Dictionary<(string, string, string), IndividualRef>();
-        foreach (var r in existing)
-        {
-            existingIndex[(Norm(r.CreditFacilityAccNum), Norm(r.CustomerID), Norm(r.DisbursementDate))] = r;
-        }
+        // The reference table can genuinely have duplicate (AccNum, CustomerID,
+        // DisbursementDate) rows -- the old Register tool used to blind-insert a
+        // fresh row on every run instead of matching against what's already there
+        // (see Initialize_SaveExcelDataToDatabaseInd). When duplicates exist, pick
+        // ONE canonical row per key via PickCanonicalIndividualRef rather than just
+        // whatever the database happened to return last -- the same helper is used
+        // by BuildReferenceVirtualRecordsInd's cross-check, so both agree on which
+        // row is authoritative.
+        var existingIndex = existing
+            .GroupBy(r => (Norm(r.CreditFacilityAccNum), Norm(r.CustomerID), Norm(r.DisbursementDate)))
+            .ToDictionary(g => g.Key, g => PickCanonicalIndividualRef(g));
 
         var toInsert = new List<IndividualRef>();
         var toUpdate = new List<IndividualRef>();
@@ -126,7 +127,11 @@ public class DataManagementService
                     // A different DOB for the same customer is a genuine conflict --
                     // flag it for manual review instead of silently trusting whichever
                     // file came in last.
-                    await RecordOrRefreshDobConflictAsync("Individual", subscriber, key.Item2, key.Item1, key.Item3,
+                    // Use dbRow's own (unnormalized) field values as the conflict's key,
+                    // not the Norm()'d matching key -- ResolveReferenceDataConflictAsync
+                    // looks the row back up by exact equality against these later, and
+                    // the row itself was stored with its original casing/whitespace.
+                    await RecordOrRefreshDobConflictAsync("Individual", subscriber, dbRow.CustomerID, dbRow.CreditFacilityAccNum, dbRow.DisbursementDate,
                         dbRow.DateOfBirth, item.DateOfBirth, fileShortName);
                 }
 
@@ -342,6 +347,30 @@ public class DataManagementService
     private string Norm(string? v) =>
         string.IsNullOrWhiteSpace(v) ? string.Empty : v.Trim().ToUpperInvariant();
 
+    // ── Canonical-row selection among duplicate reference rows ────────────────
+    // Legacy duplicates (same AccNum/CustomerID/DisbursementDate, multiple rows --
+    // see the old Register tool bug) are never deleted here, just not all treated
+    // as equally authoritative. A row that already carries real DOB/name data is
+    // preferred over a blank one, however old; only when every duplicate is
+    // completely blank do we fall back to the most recently created one. Used by
+    // both the save/enrich path (SaveExcelDataToDatabaseInd) and the reference
+    // cross-check (BuildReferenceVirtualRecordsInd) so they never disagree on
+    // which row is "the" reference for a given key.
+    public static bool IsBlankIndividualIdentity(IndividualRef r) =>
+        string.IsNullOrWhiteSpace(r.DateOfBirth) &&
+        string.IsNullOrWhiteSpace(r.Surname) &&
+        string.IsNullOrWhiteSpace(r.FirstName) &&
+        string.IsNullOrWhiteSpace(r.MiddleNames);
+
+    public static IndividualRef PickCanonicalIndividualRef(IEnumerable<IndividualRef> duplicates)
+    {
+        var rows = duplicates.ToList();
+        var withData = rows.Where(r => !IsBlankIndividualIdentity(r)).ToList();
+        return withData.Count > 0
+            ? withData.OrderByDescending(r => r.LastUpdatedDate).First()
+            : rows.OrderByDescending(r => r.CreatedDate).First();
+    }
+
     // ── Option A: "last confirmed" reporting-period tracking ──────────────────
     // Derives a human-readable "MMMM yyyy" label from the filename's facility
     // date, same convention already used for the Unloadable Log header
@@ -369,7 +398,7 @@ public class DataManagementService
     // which value is correct via the Reference Data Conflicts page. Dedupes on
     // the same key while a conflict is still unresolved, so re-processing the
     // same file repeatedly doesn't spam duplicate queue entries.
-    private async Task RecordOrRefreshDobConflictAsync(
+    public async Task RecordOrRefreshDobConflictAsync(
         string entityType, string subscriber, string custId, string accNum, string disbDate,
         string existingDob, string incomingDob, string fileShortName)
     {

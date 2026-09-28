@@ -2861,10 +2861,18 @@
                 continue;
             }
 
+            bool IsBlankName(IndividualContext r) =>
+                string.IsNullOrWhiteSpace(r.Surname?.Data) && string.IsNullOrWhiteSpace(r.FirstName?.Data) && string.IsNullOrWhiteSpace(r.MiddleNames?.Data);
+
             bool nameConflict = false; bool misspellBlocking = false; bool misspellWarning = false; bool misspellFormatting = false;
             for (int i = 0; i < records.Count && !nameConflict; i++)
                 for (int j = i + 1; j < records.Count && !nameConflict; j++)
                 {
+                    // A blank name (legacy reference rows saved before names were
+                    // captured) has nothing to compare against -- don't flag a
+                    // conflict just because one side is empty.
+                    if (IsBlankName(records[i]) || IsBlankName(records[j])) continue;
+
                     var (matches, maxTokens, isSame, viaFormatting) = CompareNameTokens(
                         records[i].Surname?.Data ?? string.Empty,
                         records[i].FirstName?.Data ?? string.Empty,
@@ -3277,9 +3285,13 @@
 
         foreach (var group in refByCustomer)
         {
-            // Most recently updated row for this customer represents what we
-            // currently trust as their identity.
-            var canonical = group.OrderByDescending(r => r.LastUpdatedDate).First();
+            // A row that already carries real DOB/name data is preferred over a
+            // blank one (legacy duplicates from the old Register tool), regardless
+            // of which is more recent; only when every duplicate for this customer
+            // is blank do we fall back to the most recently created row. Same rule
+            // SaveExcelDataToDatabaseInd uses, so the two never disagree on which
+            // row is authoritative.
+            var canonical = DataManagementService.PickCanonicalIndividualRef(group);
 
             CellDataAndStatus Cell(string? v)
             {
@@ -3757,30 +3769,45 @@
                         isSubscriber_X_or_Y = await DataManagementService.GetSubscribeX_or_Y(filename);
                         var (mainMatcherTransformer, _duplicatesInd, _correctDateOfBirth, _dobIssues, _matchdata, _newdata, _duplicateCount) = REF_MainMatcherTransformerInd_Clean_IND(RefData, ExcelDataRecieved);
                         var mainMatcherTransformer_temp = DuplicateUser_CustomerIDAndDateOfBirth(mainMatcherTransformer);
-                        // Fold reference in as virtual records so name/ID conflicts against
-                        // history get caught by the same cross-record logic that already
-                        // catches conflicts within this file -- then discard the virtual
-                        // records again before anything else sees them.
-                        var referenceVirtualsInd = BuildReferenceVirtualRecordsInd(mainMatcherTransformer_temp, RefData, out var previousNameByCustomer, out var previousDOBByCustomer, out var previousDOBReportingPeriodByCustomer);
-                        foreach (var rec in mainMatcherTransformer_temp)
+                        List<IndividualContext> referenceVirtualsInd = new();
+                        if (CleanOnlyOrCleanAndReference == false)
                         {
-                            var custKey = NormalizeCustomerId(rec.CustomerID?.Data);
-                            if (!string.IsNullOrWhiteSpace(custKey) && previousNameByCustomer.TryGetValue(custKey, out var prevName))
+                            // Fold reference in as virtual records so name/DOB conflicts against
+                            // history get caught by the same cross-record logic that already
+                            // catches conflicts within this file -- then discard the virtual
+                            // records again before anything else sees them. Only when we're
+                            // actually going to reference/save afterward: Clean Only means no
+                            // database involvement at all, not even to compare against, so a
+                            // lone record for a customer isn't spuriously bounced to UNL just
+                            // because history (which this run never even looked at) disagrees.
+                            referenceVirtualsInd = BuildReferenceVirtualRecordsInd(mainMatcherTransformer_temp, RefData, out var previousNameByCustomer, out var previousDOBByCustomer, out var previousDOBReportingPeriodByCustomer);
+                            foreach (var rec in mainMatcherTransformer_temp)
                             {
-                                rec.PreviousNameOnFile = prevName;
-                            }
-                            if (!string.IsNullOrWhiteSpace(custKey) && previousDOBByCustomer.TryGetValue(custKey, out var prevDob))
-                            {
-                                rec.PreviousDOBOnFile = prevDob;
-                                if (previousDOBReportingPeriodByCustomer.TryGetValue(custKey, out var prevDobPeriod))
+                                var custKey = NormalizeCustomerId(rec.CustomerID?.Data);
+                                if (!string.IsNullOrWhiteSpace(custKey) && previousNameByCustomer.TryGetValue(custKey, out var prevName))
                                 {
-                                    rec.PreviousDOBReportingPeriod = prevDobPeriod;
+                                    rec.PreviousNameOnFile = prevName;
+                                }
+                                if (!string.IsNullOrWhiteSpace(custKey) && previousDOBByCustomer.TryGetValue(custKey, out var prevDob))
+                                {
+                                    rec.PreviousDOBOnFile = prevDob;
+                                    if (previousDOBReportingPeriodByCustomer.TryGetValue(custKey, out var prevDobPeriod))
+                                    {
+                                        rec.PreviousDOBReportingPeriod = prevDobPeriod;
+                                    }
                                 }
                             }
+                            var forCrossChecksInd = mainMatcherTransformer_temp.Concat(referenceVirtualsInd).ToList();
+                            forCrossChecksInd = RunAllCrossRecordChecksIND(forCrossChecksInd);
+                            mainMatcherTransformer_temp = forCrossChecksInd.Except(referenceVirtualsInd).ToList();
                         }
-                        var forCrossChecksInd = mainMatcherTransformer_temp.Concat(referenceVirtualsInd).ToList();
-                        forCrossChecksInd = RunAllCrossRecordChecksIND(forCrossChecksInd);
-                        mainMatcherTransformer_temp = forCrossChecksInd.Except(referenceVirtualsInd).ToList();
+                        else
+                        {
+                            // Still run the intra-file-only cross-record checks (duplicate
+                            // name/ID mismatches within THIS file) -- just without comparing
+                            // against reference history at all.
+                            mainMatcherTransformer_temp = RunAllCrossRecordChecksIND(mainMatcherTransformer_temp);
+                        }
                         mainMatcherTransformer = mainMatcherTransformer_temp;
                         correctDateOfBirth = _correctDateOfBirth;
                         dobIssues = _dobIssues;
@@ -3802,6 +3829,31 @@
                         _lastUnlFilename = filename;
                         _lastUnlDataType = "IND";
                         _lastUnlSubcode = await DataManagementService.GetFileShortCodeFromFileName(filename);
+
+                        // Any record that landed in UNL specifically because its DOB disagreed
+                        // with reference history (not some other reason) gets queued for admin
+                        // review too. PreviousDOBOnFile is only ever set when Clean Only is
+                        // unchecked (that's the only time the virtual-reference comparison runs
+                        // at all), so this is naturally a no-op with Clean Only checked --
+                        // matching "referencing only happens when Clean Only is unchecked."
+                        // Otherwise a DOB that was wrong from the very first load just sits in
+                        // the reference table and keeps bouncing every subsequent file, with no
+                        // record anywhere an admin can act on.
+                        foreach (var r in _lastUnlBatchInd)
+                        {
+                            var incomingDob = (r.DateOfBirth?.Data ?? string.Empty).Trim();
+                            if (!string.IsNullOrWhiteSpace(r.PreviousDOBOnFile) && !string.IsNullOrWhiteSpace(incomingDob) &&
+                                !string.Equals(r.PreviousDOBOnFile, incomingDob, StringComparison.Ordinal))
+                            {
+                                await DataManagementService.RecordOrRefreshDobConflictAsync(
+                                    "Individual", _lastUnlSubcode,
+                                    (r.CustomerID?.Data ?? string.Empty).Trim(),
+                                    (r.CreditFacilityAccNum?.Data ?? string.Empty).Trim(),
+                                    (r.DisbursementDate?.Data ?? string.Empty).Trim(),
+                                    r.PreviousDOBOnFile, incomingDob, filename);
+                            }
+                        }
+
                         var unlFDate = stringHelper.GetFacilityDateFromFileName(filename, true);
                         if (unlFDate.IsValid && DateTime.TryParseExact(unlFDate.LastDate, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var unlParsedDate))
                         {
@@ -3932,16 +3984,23 @@
 
                         var RefData = await DataManagementService.GETReferenceData_BUS(filename);
                         var (mainMatcherTransformer, _duplicatesInd, _correctDateOfBirth, _dobIssues, _matchdata, _newdata, _duplicateCount) = REF_MainMatcherTransformerInd_Clean_BUS(RefData, ExcelDataRecieved);
-                        // Fold reference in as virtual records so Businessname/Busregnum/Tinum
-                        // conflicts against history get caught by the same cross-record logic
-                        // that already catches conflicts within this file (Phase 4 for BUS,
-                        // mirroring the IND version) -- then discard the virtual records again
-                        // before anything else sees them.
-                        var referenceVirtualsBus = BuildReferenceVirtualRecordsBus(mainMatcherTransformer, RefData, out _);
-                        var forCrossChecksBus = mainMatcherTransformer.Concat(referenceVirtualsBus).ToList();
-                        forCrossChecksBus = CheckForChangesInCustomerIDBusregnumTinum(forCrossChecksBus);
-                        var mainMatcherTransformer_temp = forCrossChecksBus.Except(referenceVirtualsBus).ToList();
-                        mainMatcherTransformer = mainMatcherTransformer_temp;
+                        if (CleanOnlyOrCleanAndReference == false)
+                        {
+                            // Fold reference in as virtual records so Businessname/Busregnum/Tinum
+                            // conflicts against history get caught by the same cross-record logic
+                            // that already catches conflicts within this file (Phase 4 for BUS,
+                            // mirroring the IND version) -- then discard the virtual records again
+                            // before anything else sees them. Only when we're actually going to
+                            // reference/save afterward -- see the IND branch above for why.
+                            var referenceVirtualsBus = BuildReferenceVirtualRecordsBus(mainMatcherTransformer, RefData, out _);
+                            var forCrossChecksBus = mainMatcherTransformer.Concat(referenceVirtualsBus).ToList();
+                            forCrossChecksBus = CheckForChangesInCustomerIDBusregnumTinum(forCrossChecksBus);
+                            mainMatcherTransformer = forCrossChecksBus.Except(referenceVirtualsBus).ToList();
+                        }
+                        else
+                        {
+                            mainMatcherTransformer = CheckForChangesInCustomerIDBusregnumTinum(mainMatcherTransformer);
+                        }
                         correctDateOfBirth = _correctDateOfBirth.ToString();
                         dobIssues = _dobIssues.ToString();
                         matchdata = _matchdata.ToString();
