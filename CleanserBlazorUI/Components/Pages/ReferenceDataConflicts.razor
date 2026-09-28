@@ -1,0 +1,318 @@
+@page "/reference-data-conflicts"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+
+@attribute [Authorize(Roles = "admin")]
+
+<MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
+
+<MudText Typo="Typo.h5" Class="mb-4">Reference Data Conflicts</MudText>
+
+<MudGrid Class="mb-4">
+    <MudItem xs="12" sm="6" md="4">
+        <MudSelect T="string" Label="Data Provider" @bind-Value="selectedSubscriberCode" Clearable="true">
+            @foreach (var profile in subscriberProfiles)
+            {
+                <MudSelectItem T="string" Value="@profile.SubscriberCode">@profile.SubscriberName (@profile.SubscriberCode)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+</MudGrid>
+
+<MudTabs Outlined="true" Rounded="true" Border="true" ApplyEffectsToContainer="true" Class="mt-2" PanelClass="pa-4">
+    <MudTabPanel Text="Pending Conflicts">
+        <MudText Typo="Typo.body2" Class="mb-4">
+            These are the records that came back flagged on the unloadable log for a DOB mismatch against reference
+            history. Once the data provider confirms the correct value, apply it here -- one at a time, or select
+            several and resolve them together.
+        </MudText>
+
+        @if (string.IsNullOrWhiteSpace(selectedSubscriberCode))
+        {
+            <MudAlert Severity="MudBlazor.Severity.Info">Select a Data Provider above to view its flagged records.</MudAlert>
+        }
+        else
+        {
+            <MudDataGrid T="ReferenceDataConflict" Items="@filteredConflicts" Loading="@isLoading"
+                         MultiSelection="true" @bind-SelectedItems="selectedConflicts"
+                         Filterable="true" SortMode="SortMode.Multiple" Bordered="true" Striped="true" Dense="true">
+                <Columns>
+                    <SelectColumn T="ReferenceDataConflict" />
+                    <PropertyColumn Property="x => x.EntityType" Title="Type" />
+                    <PropertyColumn Property="x => x.CustomerID" Title="CustomerID" />
+                    <PropertyColumn Property="x => x.CreditFacilityAccNum" Title="AccNum" />
+                    <PropertyColumn Property="x => x.ExistingDOB" Title="Existing DOB" />
+                    <PropertyColumn Property="x => x.IncomingDOB" Title="Incoming DOB" />
+                    <PropertyColumn Property="x => x.SourceFileName" Title="Last Seen In" />
+                    <PropertyColumn Property="x => x.DetectedDate" Title="Detected">
+                        <CellTemplate>@context.Item.DetectedDate.ToString("dd MMM yyyy HH:mm")</CellTemplate>
+                    </PropertyColumn>
+                    <TemplateColumn Title="Action" Sortable="false" Filterable="false">
+                        <CellTemplate>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => BeginResolve(new List<ReferenceDataConflict> { context.Item }))">
+                                Resolve
+                            </MudButton>
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <PagerContent>
+                    <MudDataGridPager T="ReferenceDataConflict" PageSizeOptions="new[] { 25, 50, 100 }" />
+                </PagerContent>
+                <NoRecordsContent>
+                    <MudText>No pending conflicts for this Data Provider.</MudText>
+                </NoRecordsContent>
+            </MudDataGrid>
+
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Secondary"
+                       Disabled="@(selectedConflicts.Count == 0)"
+                       OnClick="@(() => BeginResolve(selectedConflicts.ToList()))">
+                Resolve Selected (@selectedConflicts.Count)
+            </MudButton>
+        }
+
+        @if (conflictsToResolve.Count > 0)
+        {
+            <MudPaper Class="pa-4 mt-4" Outlined="true">
+                <MudText Typo="Typo.h6" Class="mb-2">
+                    @if (conflictsToResolve.Count == 1)
+                    {
+                        <text>Resolve: @conflictsToResolve[0].EntityType @conflictsToResolve[0].SubscriberCode / CustomerID @conflictsToResolve[0].CustomerID</text>
+                    }
+                    else
+                    {
+                        <text>Resolve @conflictsToResolve.Count selected records</text>
+                    }
+                </MudText>
+                <MudRadioGroup @bind-Value="dobChoice">
+                    @if (conflictsToResolve.Count == 1)
+                    {
+                        <MudRadio Value="@("existing")">Keep existing: @conflictsToResolve[0].ExistingDOB</MudRadio>
+                        <MudRadio Value="@("incoming")">Use incoming: @conflictsToResolve[0].IncomingDOB</MudRadio>
+                    }
+                    else
+                    {
+                        <MudRadio Value="@("existing")">Keep each record's existing DOB</MudRadio>
+                        <MudRadio Value="@("incoming")">Use each record's incoming DOB</MudRadio>
+                    }
+                    <MudRadio Value="@("custom")">Other value@(conflictsToResolve.Count > 1 ? " (applies to all selected)" : ":")</MudRadio>
+                </MudRadioGroup>
+                @if (dobChoice == "custom")
+                {
+                    <MudTextField @bind-Value="customDob" Label="Corrected DOB" Class="mt-2" Style="max-width: 300px" />
+                }
+                <MudTextField @bind-Value="resolutionNotes" Label="Notes (optional)" Lines="2" Class="mt-3" />
+                <div class="mt-3">
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ResolveAsync">Save Resolution</MudButton>
+                    <MudButton Class="ml-2" Variant="Variant.Text" OnClick="@(() => conflictsToResolve.Clear())">Cancel</MudButton>
+                </div>
+            </MudPaper>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Search &amp; Correct">
+        <MudText Typo="Typo.body2" Class="mb-4">
+            Directly fix a record's DOB or ID fields for the selected Data Provider, even if it was never auto-flagged as a conflict.
+        </MudText>
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" sm="4">
+                <MudSelect T="string" Label="Type" @bind-Value="searchEntityType">
+                    <MudSelectItem T="string" Value="@("Individual")">Individual</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Business")">Business</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudTextField @bind-Value="customerIdSearch" Label="CustomerID" />
+            </MudItem>
+            <MudItem xs="12" sm="4" Class="d-flex align-center">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="SearchAsync">Search</MudButton>
+            </MudItem>
+        </MudGrid>
+
+        @if (searchEntityType == "Individual")
+        {
+            <MudDataGrid T="IndividualRef" Items="@indResults" ReadOnly="false"
+                         EditMode="DataGridEditMode.Form" EditTrigger="DataGridEditTrigger.Manual"
+                         CommittedItemChanges="OnIndividualCommitted"
+                         Bordered="true" Striped="true" Dense="true">
+                <Columns>
+                    <PropertyColumn Property="x => x.CreditFacilityAccNum" Title="AccNum" ReadOnly="true" />
+                    <PropertyColumn Property="x => x.DisbursementDate" Title="DisbDate" ReadOnly="true" />
+                    <PropertyColumn Property="x => x.DateOfBirth" Title="DOB" />
+                    <PropertyColumn Property="x => x.NatIDNum" Title="NatID" />
+                    <PropertyColumn Property="x => x.VotersIDNum" Title="VotersID" />
+                    <PropertyColumn Property="x => x.DriverLicNum" Title="DriverLic" />
+                    <PropertyColumn Property="x => x.PassportNum" Title="Passport" />
+                    <PropertyColumn Property="x => x.SSNum" Title="SSNum" />
+                    <PropertyColumn Property="x => x.EzwichNum" Title="Ezwich" />
+                    <PropertyColumn Property="x => x.OtherIDNum" Title="OtherID" />
+                    <TemplateColumn Title="" Sortable="false" Filterable="false">
+                        <CellTemplate>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       OnClick="@(() => context.Actions.StartEditingItemAsync())">Edit</MudButton>
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <NoRecordsContent><MudText>No matching records. Try Search above.</MudText></NoRecordsContent>
+            </MudDataGrid>
+        }
+        else
+        {
+            <MudDataGrid T="BusinessRef" Items="@busResults" ReadOnly="false"
+                         EditMode="DataGridEditMode.Form" EditTrigger="DataGridEditTrigger.Manual"
+                         CommittedItemChanges="OnBusinessCommitted"
+                         Bordered="true" Striped="true" Dense="true">
+                <Columns>
+                    <PropertyColumn Property="x => x.CreditFacilityAccNum" Title="AccNum" ReadOnly="true" />
+                    <PropertyColumn Property="x => x.DisbursementDate" Title="DisbDate" ReadOnly="true" />
+                    <PropertyColumn Property="x => x.Busregnum" Title="Busregnum" />
+                    <PropertyColumn Property="x => x.Tinum" Title="Tinum" />
+                    <TemplateColumn Title="" Sortable="false" Filterable="false">
+                        <CellTemplate>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       OnClick="@(() => context.Actions.StartEditingItemAsync())">Edit</MudButton>
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <NoRecordsContent><MudText>No matching records. Try Search above.</MudText></NoRecordsContent>
+            </MudDataGrid>
+        }
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    [CascadingParameter] private Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState>? AuthStateTask { get; set; }
+
+    private MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;
+    string AlertSeverityVisible = "d-none";
+    string AlertSeverityMessage = string.Empty;
+    bool isLoading;
+
+    List<SubscriberProfile> subscriberProfiles = new();
+    string? selectedSubscriberCode;
+
+    List<ReferenceDataConflict> pendingConflicts = new();
+    IEnumerable<ReferenceDataConflict> filteredConflicts =>
+        pendingConflicts.Where(c => c.SubscriberCode == selectedSubscriberCode);
+    HashSet<ReferenceDataConflict> selectedConflicts = new();
+
+    List<ReferenceDataConflict> conflictsToResolve = new();
+    string dobChoice = "existing";
+    string customDob = string.Empty;
+    string resolutionNotes = string.Empty;
+
+    string searchEntityType = "Individual";
+    string customerIdSearch = string.Empty;
+    List<IndividualRef> indResults = new();
+    List<BusinessRef> busResults = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        subscriberProfiles = await DataManagementService.GetAllSubscriberProfilesAsync();
+        await LoadPendingConflictsAsync();
+    }
+
+    async Task LoadPendingConflictsAsync()
+    {
+        isLoading = true;
+        pendingConflicts = await DataManagementService.GetPendingReferenceDataConflictsAsync();
+        isLoading = false;
+    }
+
+    void BeginResolve(List<ReferenceDataConflict> conflicts)
+    {
+        conflictsToResolve = conflicts;
+        dobChoice = "existing";
+        customDob = string.Empty;
+        resolutionNotes = string.Empty;
+    }
+
+    async Task<string> GetCurrentUserNameAsync()
+    {
+        if (AuthStateTask == null) return "unknown";
+        var state = await AuthStateTask;
+        return state.User.Identity?.Name ?? "unknown";
+    }
+
+    async Task ResolveAsync()
+    {
+        if (conflictsToResolve.Count == 0) return;
+
+        if (dobChoice == "custom" && string.IsNullOrWhiteSpace(customDob))
+        {
+            AlertSeverity = MudBlazor.Severity.Warning;
+            AlertSeverityMessage = "Enter a corrected DOB before saving.";
+            AlertSeverityVisible = "d-block";
+            return;
+        }
+
+        var resolvedBy = await GetCurrentUserNameAsync();
+        int appliedCount = 0, missingCount = 0;
+
+        foreach (var conflict in conflictsToResolve)
+        {
+            var correctedDob = dobChoice switch
+            {
+                "existing" => conflict.ExistingDOB,
+                "incoming" => conflict.IncomingDOB,
+                _ => customDob
+            };
+
+            var applied = await DataManagementService.ResolveReferenceDataConflictAsync(
+                conflict.Id, correctedDob, resolvedBy, resolutionNotes);
+            if (applied) appliedCount++; else missingCount++;
+        }
+
+        AlertSeverity = missingCount == 0 ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning;
+        AlertSeverityMessage = missingCount == 0
+            ? $"Resolved {appliedCount} record(s)."
+            : $"Resolved {appliedCount} record(s); {missingCount} could not be applied (underlying reference record not found).";
+        AlertSeverityVisible = "d-block";
+
+        conflictsToResolve.Clear();
+        selectedConflicts.Clear();
+        await LoadPendingConflictsAsync();
+    }
+
+    async Task SearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(selectedSubscriberCode) || string.IsNullOrWhiteSpace(customerIdSearch))
+        {
+            AlertSeverity = MudBlazor.Severity.Warning;
+            AlertSeverityMessage = "Select a Data Provider and enter a CustomerID to search.";
+            AlertSeverityVisible = "d-block";
+            return;
+        }
+
+        AlertSeverityVisible = "d-none";
+        if (searchEntityType == "Individual")
+        {
+            indResults = await DataManagementService.SearchIndividualRefAsync(selectedSubscriberCode.Trim(), customerIdSearch.Trim());
+        }
+        else
+        {
+            busResults = await DataManagementService.SearchBusinessRefAsync(selectedSubscriberCode.Trim(), customerIdSearch.Trim());
+        }
+    }
+
+    async Task OnIndividualCommitted(IndividualRef row)
+    {
+        await DataManagementService.UpdateIndividualRefIdentityAsync(
+            row.Id, row.DateOfBirth ?? string.Empty, row.NatIDNum ?? string.Empty, row.VotersIDNum ?? string.Empty,
+            row.DriverLicNum ?? string.Empty, row.PassportNum ?? string.Empty, row.SSNum ?? string.Empty,
+            row.EzwichNum ?? string.Empty, row.OtherIDNum ?? string.Empty);
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = "Record updated.";
+        AlertSeverityVisible = "d-block";
+    }
+
+    async Task OnBusinessCommitted(BusinessRef row)
+    {
+        await DataManagementService.UpdateBusinessRefIdentityAsync(
+            row.Id, row.Busregnum ?? string.Empty, row.Tinum ?? string.Empty);
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = "Record updated.";
+        AlertSeverityVisible = "d-block";
+    }
+}

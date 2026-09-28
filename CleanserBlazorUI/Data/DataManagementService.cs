@@ -114,11 +114,20 @@ public class DataManagementService
                 // bypasses the change tracker entirely, so a DOB-only update
                 // with nothing else newly enriched was silently never
                 // persisted. Now explicitly tracked whenever DOB actually changes.
-                if (!string.IsNullOrWhiteSpace(item.DateOfBirth) && dbRow.DateOfBirth != item.DateOfBirth)
+                if (!string.IsNullOrWhiteSpace(item.DateOfBirth) && string.IsNullOrWhiteSpace(dbRow.DateOfBirth))
                 {
+                    // Nothing on file yet -- this is enrichment, not a conflict.
                     dbRow.DateOfBirth = item.DateOfBirth;
                     dbRow.LastUpdatedDate = now;
                     if (!toUpdate.Contains(dbRow)) toUpdate.Add(dbRow);
+                }
+                else if (!string.IsNullOrWhiteSpace(item.DateOfBirth) && dbRow.DateOfBirth != item.DateOfBirth)
+                {
+                    // A different DOB for the same customer is a genuine conflict --
+                    // flag it for manual review instead of silently trusting whichever
+                    // file came in last.
+                    await RecordOrRefreshDobConflictAsync("Individual", subscriber, key.Item2, key.Item1, key.Item3,
+                        dbRow.DateOfBirth, item.DateOfBirth, fileShortName);
                 }
 
                 // Status is a mutable real-world state (open/closed), not enriched-once
@@ -235,12 +244,10 @@ public class DataManagementService
 
             if (existingIndex.TryGetValue(key, out var dbRow))
             {
-                if (!string.IsNullOrWhiteSpace(item.DateOfBirth) && dbRow.DateOfBirth != item.DateOfBirth)
-                {
-                    dbRow.DateOfBirth = item.DateOfBirth;
-                    dbRow.LastUpdatedDate = now;
-                    if (!toUpdate.Contains(dbRow)) toUpdate.Add(dbRow);
-                }
+                // Business records carry no real DOB -- the uploaded file has no such
+                // column at all (see SpreadSheetHeadersData.Business). DateOfBirth on
+                // BusinessRef is left untouched here; don't confuse it with the real
+                // Registrationdate/Commencementdate fields, which are handled below.
 
                 string? businessName = dbRow.Businessname, busRegNum = dbRow.Busregnum, tinNum = dbRow.Tinum;
                 bool changed = false;
@@ -354,82 +361,67 @@ public class DataManagementService
         return string.Empty;
     }
 
+    // ── DOB conflict recording ─────────────────────────────────────────────
+    // A different DOB for the same (AccNum, CustomerID, DisbursementDate) reference
+    // row is a genuine identity conflict, not something either save path should
+    // silently resolve by trusting whichever file came in last. Instead of
+    // overwriting, record/refresh a pending entry here so an admin can decide
+    // which value is correct via the Reference Data Conflicts page. Dedupes on
+    // the same key while a conflict is still unresolved, so re-processing the
+    // same file repeatedly doesn't spam duplicate queue entries.
+    private async Task RecordOrRefreshDobConflictAsync(
+        string entityType, string subscriber, string custId, string accNum, string disbDate,
+        string existingDob, string incomingDob, string fileShortName)
+    {
+        var pending = await _context.ReferenceDataConflicts.FirstOrDefaultAsync(c =>
+            c.ResolvedDate == null &&
+            c.EntityType == entityType &&
+            c.SubscriberCode == subscriber &&
+            c.CustomerID == custId &&
+            c.CreditFacilityAccNum == accNum &&
+            c.DisbursementDate == disbDate);
 
+        if (pending != null)
+        {
+            pending.IncomingDOB = incomingDob;
+            pending.SourceFileName = fileShortName;
+            pending.DetectedDate = DateTime.Now;
+        }
+        else
+        {
+            _context.ReferenceDataConflicts.Add(new ReferenceDataConflict
+            {
+                EntityType = entityType,
+                SubscriberCode = subscriber,
+                CustomerID = custId,
+                CreditFacilityAccNum = accNum,
+                DisbursementDate = disbDate,
+                ExistingDOB = existingDob,
+                IncomingDOB = incomingDob,
+                SourceFileName = fileShortName,
+                DetectedDate = DateTime.Now
+            });
+        }
+        await _context.SaveChangesAsync();
+    }
 
-    //INSERT REFERENCE BUSINESS DATA
+    // "Register / Insert reference(s)" used to blindly bulk-insert every row as
+    // a brand new IndividualRef with no lookup against what's already there --
+    // never capturing Surname/FirstName/MiddleNames/ID fields or LastUpdatedDate
+    // at all, and creating a fresh duplicate row on every re-run against the
+    // same (AccNum, CustomerID, DisbursementDate) key instead of enriching the
+    // one that already exists. SaveExcelDataToDatabaseInd already does exactly
+    // the match-then-enrich-or-insert logic this needs (plus the DOB-conflict
+    // flagging above), so delegate to it instead of maintaining a second,
+    // divergent write path into the same table.
     public async Task Initialize_SaveExcelDataToDatabaseInd(IEnumerable<DBIndividualContext> dataFromExcel, string fileShortName)
     {
-        //var subscriber = await GetFileShortCodeFromFileName(fileShortName);
-        var subscriber = await GetFileShortCodeFromFileName(fileShortName);
-        const int batchSize = 10_000;
-        var currentBatch = new List<DBIndividualContext>(batchSize);
-        var currentBatchDB = new List<IndividualRef>();
-
-        var _createdDate = DateTime.Now;
-        var currentVersion = await GetIndividualMaxversion();
-        foreach (var item in dataFromExcel)
-        {
-            currentBatchDB.Add(new IndividualRef
-            {
-                CreditFacilityAccNum = item.CreditFacilityAccNum,
-                CustomerID = item.CustomerID,
-                DisbursementDate = item.DisbursementDate,
-                DateOfBirth = item.DateOfBirth,
-                SubscriberCode = subscriber,
-                CurrenVersion = currentVersion,
-                CreatedDate = _createdDate
-            });
-
-            if (currentBatchDB.Count >= batchSize)
-            {
-                await BulkInsertBatchIND(currentBatchDB);
-                currentBatch.Clear();
-                currentBatchDB.Clear();
-            }
-        }
-
-        // Insert remaining records
-        if (currentBatchDB.Count > 0)
-        {
-            await BulkInsertBatchIND(currentBatchDB);
-        }
+        await SaveExcelDataToDatabaseInd(dataFromExcel, fileShortName);
     }
+    // See Initialize_SaveExcelDataToDatabaseInd above -- same fix, same reason.
     public async Task Initialize_SaveExcelDataToDatabaseBus(IEnumerable<DBBusinessContext> dataFromExcel, string fileShortName)
     {
-        //var subscriber = await GetFileShortCodeFromFileName(fileShortName);
-        var subscriber = await GetFileShortCodeFromFileName(fileShortName);
-        const int batchSize = 10_000;
-        var currentBatch = new List<DBBusinessContext>(batchSize);
-        var currentBatchDB = new List<BusinessRef>();
-
-        var _createdDate = DateTime.Now;
-        var currentVersion = await GetBusinessMaxversion();
-        foreach (var item in dataFromExcel)
-        {
-            currentBatchDB.Add(new BusinessRef
-            {
-                CreditFacilityAccNum = item.Facilityaccnum,
-                CustomerID = item.CustomerID,
-                DisbursementDate = item.DisbursementDate,
-                DateOfBirth = item.DateOfBirth,
-                SubscriberCode = subscriber,
-                CurrenVersion = currentVersion,
-                CreatedDate = _createdDate
-            });
-
-            if (currentBatchDB.Count >= batchSize)
-            {
-                await BulkInsertBatchBUS(currentBatchDB);
-                currentBatch.Clear();
-                currentBatchDB.Clear();
-            }
-        }
-
-        // Insert remaining records
-        if (currentBatchDB.Count > 0)
-        {
-            await BulkInsertBatchBUS(currentBatchDB);
-        }
+        await SaveExcelDataToDatabaseBus(dataFromExcel, fileShortName);
     }
     
     
@@ -1033,5 +1025,161 @@ public class DataManagementService
             .ToListAsync();
 
         return grouped.Select(g => (g.ErrorMessage, g.Category, g.TotalCount)).ToList();
+    }
+
+    // ── Reference Data Conflicts: admin review/correction ──────────────────────
+    // (see ReferenceDataConflicts.razor, admin-only)
+
+    public async Task<List<ReferenceDataConflict>> GetPendingReferenceDataConflictsAsync()
+    {
+        return await _context.ReferenceDataConflicts
+            .Where(c => c.ResolvedDate == null)
+            .OrderByDescending(c => c.DetectedDate)
+            .ToListAsync();
+    }
+
+    // Writes the admin-chosen DOB onto the actual reference row and marks the
+    // conflict resolved. Returns false if the conflict or its target row can't
+    // be found (e.g. the row was deleted since the conflict was recorded).
+    public async Task<bool> ResolveReferenceDataConflictAsync(int conflictId, string correctedDob, string resolvedBy, string? notes)
+    {
+        var conflict = await _context.ReferenceDataConflicts.FindAsync(conflictId);
+        if (conflict == null || conflict.ResolvedDate != null) return false;
+
+        bool applied;
+        if (conflict.EntityType == "Individual")
+        {
+            var row = await _context.IndividualsData.FirstOrDefaultAsync(r =>
+                r.SubscriberCode == conflict.SubscriberCode && r.CustomerID == conflict.CustomerID &&
+                r.CreditFacilityAccNum == conflict.CreditFacilityAccNum && r.DisbursementDate == conflict.DisbursementDate);
+            applied = row != null;
+            if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
+        }
+        else
+        {
+            var row = await _context.BusinessesData.FirstOrDefaultAsync(r =>
+                r.SubscriberCode == conflict.SubscriberCode && r.CustomerID == conflict.CustomerID &&
+                r.CreditFacilityAccNum == conflict.CreditFacilityAccNum && r.DisbursementDate == conflict.DisbursementDate);
+            applied = row != null;
+            if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
+        }
+
+        conflict.ResolvedDate = DateTime.Now;
+        conflict.ResolvedBy = resolvedBy;
+        conflict.ResolutionNotes = notes;
+        await _context.SaveChangesAsync();
+        return applied;
+    }
+
+    // ── Direct search + manual correction (outside the conflict queue) ─────────
+    // For fixing a record nobody's file ever conflicted against but that's
+    // still known to be wrong (e.g. reported by a subscriber).
+
+    public async Task<List<IndividualRef>> SearchIndividualRefAsync(string subscriberCode, string customerId) =>
+        await _context.IndividualsData
+            .Where(r => r.SubscriberCode == subscriberCode && r.CustomerID == customerId)
+            .ToListAsync();
+
+    public async Task<List<BusinessRef>> SearchBusinessRefAsync(string subscriberCode, string customerId) =>
+        await _context.BusinessesData
+            .Where(r => r.SubscriberCode == subscriberCode && r.CustomerID == customerId)
+            .ToListAsync();
+
+    public async Task UpdateIndividualRefIdentityAsync(int id, string dob, string natId, string votersId,
+        string driverLic, string passport, string ssNum, string ezwich, string otherId)
+    {
+        var row = await _context.IndividualsData.FindAsync(id);
+        if (row == null) return;
+        row.DateOfBirth = dob;
+        row.NatIDNum = natId; row.VotersIDNum = votersId; row.DriverLicNum = driverLic;
+        row.PassportNum = passport; row.SSNum = ssNum; row.EzwichNum = ezwich; row.OtherIDNum = otherId;
+        row.LastUpdatedDate = DateTime.Now;
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateBusinessRefIdentityAsync(int id, string busRegNum, string tinNum)
+    {
+        var row = await _context.BusinessesData.FindAsync(id);
+        if (row == null) return;
+        row.Busregnum = busRegNum; row.Tinum = tinNum;
+        row.LastUpdatedDate = DateTime.Now;
+        await _context.SaveChangesAsync();
+    }
+
+    // ── Bulk correction import (admin-only, see ReferenceDataBulkUpdate.razor) ──
+    // Only overwrites fields actually supplied in a row -- a blank cell in the
+    // import leaves that field untouched rather than clearing it. Also
+    // auto-resolves any pending conflict for the same key, since a bulk
+    // correction is itself the manual review the conflict was waiting on.
+    public async Task<BulkReferenceCorrectionResult> ApplyBulkReferenceCorrectionsAsync(List<BulkReferenceCorrectionRow> rows)
+    {
+        var result = new BulkReferenceCorrectionResult();
+
+        async Task ResolveMatchingConflict(string entityType, string subscriberCode, string customerId, string accNum, string disbDate)
+        {
+            var pending = await _context.ReferenceDataConflicts.FirstOrDefaultAsync(c =>
+                c.ResolvedDate == null && c.EntityType == entityType &&
+                c.SubscriberCode == subscriberCode && c.CustomerID == customerId &&
+                c.CreditFacilityAccNum == accNum && c.DisbursementDate == disbDate);
+            if (pending != null)
+            {
+                pending.ResolvedDate = DateTime.Now;
+                pending.ResolvedBy = "Bulk Import";
+            }
+        }
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                if (string.Equals(row.EntityType, "Individual", StringComparison.OrdinalIgnoreCase))
+                {
+                    var dbRow = await _context.IndividualsData.FirstOrDefaultAsync(r =>
+                        r.SubscriberCode == row.SubscriberCode && r.CustomerID == row.CustomerID &&
+                        r.CreditFacilityAccNum == row.CreditFacilityAccNum && r.DisbursementDate == row.DisbursementDate);
+                    if (dbRow == null) { result.NotFound++; continue; }
+
+                    if (!string.IsNullOrWhiteSpace(row.DateOfBirth)) dbRow.DateOfBirth = row.DateOfBirth;
+                    if (!string.IsNullOrWhiteSpace(row.NatIDNum)) dbRow.NatIDNum = row.NatIDNum;
+                    if (!string.IsNullOrWhiteSpace(row.VotersIDNum)) dbRow.VotersIDNum = row.VotersIDNum;
+                    if (!string.IsNullOrWhiteSpace(row.DriverLicNum)) dbRow.DriverLicNum = row.DriverLicNum;
+                    if (!string.IsNullOrWhiteSpace(row.PassportNum)) dbRow.PassportNum = row.PassportNum;
+                    if (!string.IsNullOrWhiteSpace(row.SSNum)) dbRow.SSNum = row.SSNum;
+                    if (!string.IsNullOrWhiteSpace(row.EzwichNum)) dbRow.EzwichNum = row.EzwichNum;
+                    if (!string.IsNullOrWhiteSpace(row.OtherIDNum)) dbRow.OtherIDNum = row.OtherIDNum;
+                    dbRow.LastUpdatedDate = DateTime.Now;
+
+                    await ResolveMatchingConflict("Individual", row.SubscriberCode, row.CustomerID, row.CreditFacilityAccNum, row.DisbursementDate);
+                    result.Applied++;
+                }
+                else if (string.Equals(row.EntityType, "Business", StringComparison.OrdinalIgnoreCase))
+                {
+                    var dbRow = await _context.BusinessesData.FirstOrDefaultAsync(r =>
+                        r.SubscriberCode == row.SubscriberCode && r.CustomerID == row.CustomerID &&
+                        r.CreditFacilityAccNum == row.CreditFacilityAccNum && r.DisbursementDate == row.DisbursementDate);
+                    if (dbRow == null) { result.NotFound++; continue; }
+
+                    // No DateOfBirth here -- Business records have no such column in
+                    // the uploaded file (see Registrationdate/Commencementdate instead).
+                    if (!string.IsNullOrWhiteSpace(row.Busregnum)) dbRow.Busregnum = row.Busregnum;
+                    if (!string.IsNullOrWhiteSpace(row.Tinum)) dbRow.Tinum = row.Tinum;
+                    dbRow.LastUpdatedDate = DateTime.Now;
+
+                    await ResolveMatchingConflict("Business", row.SubscriberCode, row.CustomerID, row.CreditFacilityAccNum, row.DisbursementDate);
+                    result.Applied++;
+                }
+                else
+                {
+                    result.Errors.Add($"Row for CustomerID '{row.CustomerID}': unrecognized EntityType '{row.EntityType}' (expected Individual or Business)");
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add($"Row for CustomerID '{row.CustomerID}': {ex.Message}");
+            }
+        }
+
+        await _context.SaveChangesAsync();
+        return result;
     }
 }

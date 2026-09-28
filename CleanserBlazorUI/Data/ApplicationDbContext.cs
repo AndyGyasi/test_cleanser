@@ -16,6 +16,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     // (raw ADO.NET against [Subscriber].[Subscribers], no schema tracking)
     // into this EF-managed one. See GetShortCodeFromSubscribeIDAsync.
     public DbSet<SubscribeContext> SubscriberShortCodes { get; set; }
+    public DbSet<ReferenceDataConflict> ReferenceDataConflicts { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

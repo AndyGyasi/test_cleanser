@@ -1,0 +1,215 @@
+@page "/reference-data-bulk-update"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+
+@attribute [Authorize(Roles = "admin")]
+
+<MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
+
+<MudText Typo="Typo.h5" Class="mb-4">Bulk Update Reference Data</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Correct DOB and ID fields for many reference records at once. Only cells you fill in are applied --
+    a blank cell leaves that field untouched. Matches each row to an existing record by Subscriber Code,
+    CustomerID, AccNum and Disbursement Date, so those four columns must match exactly what's already on file.
+</MudText>
+
+<MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="DownloadTemplateAsync" Class="mb-4">
+    Download Import Template
+</MudButton>
+
+<div @ref="DropZone" class="dropzone" style="border: 2px dashed #4caf50; border-radius: 8px; padding: 30px; text-align: center;">
+    <InputFile OnChange="OnFileSelected" accept=".xlsx" />
+    <MudText Class="mt-2">Select the completed template (.xlsx) to apply corrections.</MudText>
+</div>
+
+@if (isProcessing)
+{
+    <MudProgressLinear Indeterminate="true" Class="mt-4" />
+}
+
+@if (lastResult != null)
+{
+    <MudPaper Class="pa-4 mt-4" Outlined="true">
+        <MudText Typo="Typo.subtitle1">Import result</MudText>
+        <MudText>Applied: @lastResult.Applied</MudText>
+        <MudText>Not found (no matching reference record): @lastResult.NotFound</MudText>
+        @if (lastResult.Errors.Count > 0)
+        {
+            <MudText Color="Color.Error" Class="mt-2">Errors:</MudText>
+            @foreach (var err in lastResult.Errors)
+            {
+                <MudText Color="Color.Error" Typo="Typo.body2">@err</MudText>
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    private MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;
+    string AlertSeverityVisible = "d-none";
+    string AlertSeverityMessage = string.Empty;
+    bool isProcessing;
+    BulkReferenceCorrectionResult? lastResult;
+
+    ElementReference DropZone;
+
+    static readonly string[] TemplateHeaders = new[]
+    {
+        "EntityType", "SubscriberCode", "CustomerID", "CreditFacilityAccNum", "DisbursementDate",
+        "DateOfBirth", "NatIDNum", "VotersIDNum", "DriverLicNum", "PassportNum", "SSNum", "EzwichNum",
+        "OtherIDNum", "Busregnum", "Tinum"
+    };
+
+    async Task DownloadTemplateAsync()
+    {
+        var bytes = BuildTemplate();
+        await JS.InvokeVoidAsync("downloadFile", "ReferenceDataCorrectionTemplate.xlsx", bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    byte[] BuildTemplate()
+    {
+        using var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("Corrections");
+        for (int i = 0; i < TemplateHeaders.Length; i++)
+            ws.Cell(1, i + 1).Value = TemplateHeaders[i];
+
+        // Example rows -- EntityType/SubscriberCode/CustomerID/CreditFacilityAccNum/
+        // DisbursementDate must match an existing record exactly; every other column
+        // is optional and left as-is when blank.
+        var indExample = new[] { "Individual", "ABC", "123456", "ABC-NW-123456", "20231130", "19900101" };
+        for (int i = 0; i < indExample.Length; i++) ws.Cell(2, i + 1).Value = indExample[i];
+
+        // No DateOfBirth here -- Business records have no such column in the
+        // uploaded file at all (that column only applies to Individual rows).
+        var busExample = new[] { "Business", "ABC", "654321", "ABC-NW-654321", "20231130" };
+        for (int i = 0; i < busExample.Length; i++) ws.Cell(3, i + 1).Value = busExample[i];
+        ws.Cell(3, 14).Value = "BN123456"; // Busregnum
+        ws.Cell(3, 15).Value = "TIN123456"; // Tinum
+
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
+    }
+
+    async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var browserFile = e.File;
+        if (browserFile == null) return;
+
+        isProcessing = true;
+        lastResult = null;
+        AlertSeverityVisible = "d-none";
+        StateHasChanged();
+
+        string? tempPath = null;
+        try
+        {
+            // Upload straight to disk over plain HTTP, bypassing the SignalR circuit's
+            // small message-size ceiling that OpenReadStream() would otherwise hit --
+            // same fix as the main cleaning dropzones (see REF_FileUpload).
+            string[] tempPaths;
+            try
+            {
+                tempPaths = await JS.InvokeAsync<string[]>("uploadSelectedFiles", DropZone, "/api/uploads/spreadsheets");
+            }
+            catch (Exception)
+            {
+                tempPaths = Array.Empty<string>();
+            }
+
+            if (tempPaths.Length > 0)
+            {
+                tempPath = tempPaths[0];
+            }
+            else
+            {
+                // Fallback for a small file if the upload endpoint couldn't be reached.
+                var uploadDirectory = Path.Combine(Environment.WebRootPath, "temp");
+                Directory.CreateDirectory(uploadDirectory);
+                tempPath = Path.Combine(uploadDirectory, $"{Path.GetRandomFileName()}_____{browserFile.Name}");
+                using var filestream = browserFile.OpenReadStream(50 * 1024 * 1024);
+                using var destination = new FileStream(tempPath, FileMode.Create);
+                await filestream.CopyToAsync(destination);
+            }
+
+            var rows = ParseImportFile(tempPath);
+            if (rows.Count == 0)
+            {
+                AlertSeverity = MudBlazor.Severity.Warning;
+                AlertSeverityMessage = "No data rows found in the uploaded file.";
+                AlertSeverityVisible = "d-block";
+                return;
+            }
+
+            lastResult = await DataManagementService.ApplyBulkReferenceCorrectionsAsync(rows);
+            AlertSeverity = lastResult.Errors.Count > 0 ? MudBlazor.Severity.Warning : MudBlazor.Severity.Success;
+            AlertSeverityMessage = $"Processed {rows.Count} row(s): {lastResult.Applied} applied, {lastResult.NotFound} not found.";
+            AlertSeverityVisible = "d-block";
+        }
+        catch (Exception ex)
+        {
+            AlertSeverity = MudBlazor.Severity.Error;
+            AlertSeverityMessage = $"Import failed: {ex.Message}";
+            AlertSeverityVisible = "d-block";
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(tempPath))
+            {
+                try { File.Delete(tempPath); } catch { /* non-fatal, swept later */ }
+            }
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    List<BulkReferenceCorrectionRow> ParseImportFile(string filePath)
+    {
+        using var wb = new XLWorkbook(filePath);
+        var ws = wb.Worksheet(1);
+        var headerRow = ws.Row(1);
+
+        var headerMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cell in headerRow.CellsUsed())
+        {
+            var header = cell.GetValue<string>().Trim();
+            if (!string.IsNullOrWhiteSpace(header))
+                headerMap[header] = cell.Address.ColumnNumber;
+        }
+
+        string Get(IXLRow row, string header) =>
+            headerMap.TryGetValue(header, out var col) ? row.Cell(col).GetValue<string>().Trim() : string.Empty;
+
+        var rows = new List<BulkReferenceCorrectionRow>();
+        foreach (var row in ws.RowsUsed().Where(r => r.RowNumber() > 1))
+        {
+            var entityType = Get(row, "EntityType");
+            var customerId = Get(row, "CustomerID");
+            if (string.IsNullOrWhiteSpace(entityType) && string.IsNullOrWhiteSpace(customerId))
+                continue; // skip fully blank rows
+
+            rows.Add(new BulkReferenceCorrectionRow
+            {
+                EntityType = entityType,
+                SubscriberCode = Get(row, "SubscriberCode"),
+                CustomerID = customerId,
+                CreditFacilityAccNum = Get(row, "CreditFacilityAccNum"),
+                DisbursementDate = Get(row, "DisbursementDate"),
+                DateOfBirth = Get(row, "DateOfBirth"),
+                NatIDNum = Get(row, "NatIDNum"),
+                VotersIDNum = Get(row, "VotersIDNum"),
+                DriverLicNum = Get(row, "DriverLicNum"),
+                PassportNum = Get(row, "PassportNum"),
+                SSNum = Get(row, "SSNum"),
+                EzwichNum = Get(row, "EzwichNum"),
+                OtherIDNum = Get(row, "OtherIDNum"),
+                Busregnum = Get(row, "Busregnum"),
+                Tinum = Get(row, "Tinum"),
+            });
+        }
+        return rows;
+    }
+}

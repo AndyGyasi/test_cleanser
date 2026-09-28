@@ -82,7 +82,14 @@ builder.Services.AddAuthentication(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sqlOptions =>
+        // ADO.NET's default 30s command timeout is too short for this app's bulk
+        // reference lookups/inserts on large files -- example.appsettings.json's
+        // template connection string always carried "Command Timeout=0" for this
+        // reason, but that setting silently vanishes if a deployed appsettings.json
+        // omits it (as happened on .2/.83), so set it here instead of relying on
+        // every environment's connection string to remember it.
+        sqlOptions.CommandTimeout(300)));
 
 builder.Services.AddQuickGridEntityFrameworkAdapter();
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
