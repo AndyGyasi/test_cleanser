@@ -5137,7 +5137,9 @@
         for (int i = 0; i < maxLength; i++)
         {
             var errorsPair = new ErrorsPairs(expectedHeaders[i], actualHeaders[i]);
-            if (i == 17 && (actualHeaders[i] == "dateofbrith" || actualHeaders[i] == "dob1")) //17
+            // DateOfBirth/DateOfBrith(typo)/DOB are all the same field -- DOB is
+            // the canonical output name now, so accept any of the input spellings.
+            if (i == 17 && (actualHeaders[i] == "dateofbrith" || actualHeaders[i] == "dateofbirth" || actualHeaders[i] == "dob1")) //17
             {
                 errorsPair = null;
             }
@@ -5162,6 +5164,11 @@
                 errorsPair = null;
             }
             if (i == 70 && actualHeaders[i] == "facilityter") //70
+            {
+                errorsPair = null;
+            }
+            // DateAccountOpened is shortened to just "AccountOpened" in some Dud files.
+            if (actualHeaders[i] == "accountopened" && expectedHeaders[i].Equals("dateaccountopened", StringComparison.OrdinalIgnoreCase))
             {
                 errorsPair = null;
             }
