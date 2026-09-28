@@ -118,6 +118,7 @@
                 <MudSelect T="string" Label="Type" @bind-Value="searchEntityType">
                     <MudSelectItem T="string" Value="@("Individual")">Individual</MudSelectItem>
                     <MudSelectItem T="string" Value="@("Business")">Business</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("IndividualMobile")">Individual Mobile</MudSelectItem>
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="4">
@@ -155,7 +156,7 @@
                 <NoRecordsContent><MudText>No matching records. Try Search above.</MudText></NoRecordsContent>
             </MudDataGrid>
         }
-        else
+        else if (searchEntityType == "Business")
         {
             <MudDataGrid T="BusinessRef" Items="@busResults" ReadOnly="false"
                          EditMode="DataGridEditMode.Form" EditTrigger="DataGridEditTrigger.Manual"
@@ -166,6 +167,33 @@
                     <PropertyColumn Property="x => x.DisbursementDate" Title="DisbDate" ReadOnly="true" />
                     <PropertyColumn Property="x => x.Busregnum" Title="Busregnum" />
                     <PropertyColumn Property="x => x.Tinum" Title="Tinum" />
+                    <TemplateColumn Title="" Sortable="false" Filterable="false">
+                        <CellTemplate>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       OnClick="@(() => context.Actions.StartEditingItemAsync())">Edit</MudButton>
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <NoRecordsContent><MudText>No matching records. Try Search above.</MudText></NoRecordsContent>
+            </MudDataGrid>
+        }
+        else if (searchEntityType == "IndividualMobile")
+        {
+            <MudDataGrid T="IndividualMobileRef" Items="@indMobileResults" ReadOnly="false"
+                         EditMode="DataGridEditMode.Form" EditTrigger="DataGridEditTrigger.Manual"
+                         CommittedItemChanges="OnIndividualMobileCommitted"
+                         Bordered="true" Striped="true" Dense="true">
+                <Columns>
+                    <PropertyColumn Property="x => x.CreditFacilityAccNum" Title="AccNum" ReadOnly="true" />
+                    <PropertyColumn Property="x => x.DisbursementDate" Title="DisbDate" ReadOnly="true" />
+                    <PropertyColumn Property="x => x.DateOfBirth" Title="DOB" />
+                    <PropertyColumn Property="x => x.NatIDNum" Title="NatID" />
+                    <PropertyColumn Property="x => x.VotersIDNum" Title="VotersID" />
+                    <PropertyColumn Property="x => x.DriverLicNum" Title="DriverLic" />
+                    <PropertyColumn Property="x => x.PassportNum" Title="Passport" />
+                    <PropertyColumn Property="x => x.SSNum" Title="SSNum" />
+                    <PropertyColumn Property="x => x.EzwichNum" Title="Ezwich" />
+                    <PropertyColumn Property="x => x.OtherIDNum" Title="OtherID" />
                     <TemplateColumn Title="" Sortable="false" Filterable="false">
                         <CellTemplate>
                             <MudButton Size="Size.Small" Variant="Variant.Outlined"
@@ -204,6 +232,7 @@
     string customerIdSearch = string.Empty;
     List<IndividualRef> indResults = new();
     List<BusinessRef> busResults = new();
+    List<IndividualMobileRef> indMobileResults = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -288,9 +317,13 @@
         {
             indResults = await DataManagementService.SearchIndividualRefAsync(selectedSubscriberCode.Trim(), customerIdSearch.Trim());
         }
-        else
+        else if (searchEntityType == "Business")
         {
             busResults = await DataManagementService.SearchBusinessRefAsync(selectedSubscriberCode.Trim(), customerIdSearch.Trim());
+        }
+        else if (searchEntityType == "IndividualMobile")
+        {
+            indMobileResults = await DataManagementService.SearchIndividualMobileRefAsync(selectedSubscriberCode.Trim(), customerIdSearch.Trim());
         }
     }
 
@@ -310,6 +343,18 @@
     {
         await DataManagementService.UpdateBusinessRefIdentityAsync(
             row.Id, row.Busregnum ?? string.Empty, row.Tinum ?? string.Empty);
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = "Record updated.";
+        AlertSeverityVisible = "d-block";
+    }
+
+    async Task OnIndividualMobileCommitted(IndividualMobileRef row)
+    {
+        await DataManagementService.UpdateIndividualMobileRefIdentityAsync(
+            row.Id, row.DateOfBirth ?? string.Empty, row.NatIDNum ?? string.Empty, row.VotersIDNum ?? string.Empty,
+            row.DriverLicNum ?? string.Empty, row.PassportNum ?? string.Empty, row.SSNum ?? string.Empty,
+            row.EzwichNum ?? string.Empty, row.OtherIDNum ?? string.Empty);
 
         AlertSeverity = MudBlazor.Severity.Success;
         AlertSeverityMessage = "Record updated.";

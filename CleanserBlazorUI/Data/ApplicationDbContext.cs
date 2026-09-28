@@ -6,6 +6,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 {
     public DbSet<BusinessRef> BusinessesData { get; set; }
     public DbSet<IndividualRef> IndividualsData { get; set; }
+    public DbSet<IndividualMobileRef> IndividualsMobileData { get; set; }
     public DbSet<SettingsClass> Settings { get; set; }
     public DbSet<BusSettNormalizer> BusinessClassNormalizer { get; set; }
     public DbSet<SubscriberProfile> SubscriberProfiles { get; set; }

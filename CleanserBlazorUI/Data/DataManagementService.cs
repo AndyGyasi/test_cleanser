@@ -28,6 +28,36 @@ public class DataManagementService
             .Where(p => p.SubscriberCode == subscriber)
             .ToListAsync();
     }
+    // Individual Records Mobile -- same schema as Individual, separate table
+    // (IndividualsMobileData) so a CustomerID appearing in both channels never
+    // cross-contaminates.
+    public async Task<List<IndividualMobileRef>> GETReferenceData_INDMobile(string fileShortName)
+    {
+        var subscriber = await GetFileShortCodeFromFileName(fileShortName);
+        return await _context.IndividualsMobileData
+            .Where(p => p.SubscriberCode == subscriber)
+            .ToListAsync();
+    }
+
+    // Maps IndividualMobileRef rows into IndividualRef-shaped objects so the
+    // existing IND matcher/transformer and cross-record-check logic (which take
+    // List<IndividualRef>) can be reused as-is for the Mobile channel, instead
+    // of duplicating that large, intricate logic a second time. Only used for
+    // reading/comparing -- writes always go through SaveExcelDataToDatabaseIndMobile,
+    // which targets IndividualsMobileData directly.
+    public static List<IndividualRef> MapMobileToIndividualRefShape(List<IndividualMobileRef> mobileRows) =>
+        mobileRows.Select(m => new IndividualRef
+        {
+            Id = m.Id, CurrenVersion = m.CurrenVersion, SubscriberCode = m.SubscriberCode,
+            CreditFacilityAccNum = m.CreditFacilityAccNum, CustomerID = m.CustomerID,
+            DateOfBirth = m.DateOfBirth, DisbursementDate = m.DisbursementDate,
+            CreatedDate = m.CreatedDate, LastUpdatedDate = m.LastUpdatedDate,
+            LastConfirmedReportingPeriod = m.LastConfirmedReportingPeriod,
+            NatIDNum = m.NatIDNum, VotersIDNum = m.VotersIDNum, DriverLicNum = m.DriverLicNum,
+            PassportNum = m.PassportNum, SSNum = m.SSNum, EzwichNum = m.EzwichNum, OtherIDNum = m.OtherIDNum,
+            Surname = m.Surname, FirstName = m.FirstName, MiddleNames = m.MiddleNames,
+            FacilityStatusCode = m.FacilityStatusCode
+        }).ToList();
     
     
     
@@ -215,6 +245,153 @@ public class DataManagementService
         return await SaveExcelDataToDatabaseInd(mapped, fileShortName);
     }
 
+    // ── Individual Records Mobile Upsert ────────────────────────────────────────
+    // Exact mirror of SaveExcelDataToDatabaseInd above, targeting IndividualsMobileData
+    // instead of IndividualsData. Kept as a genuine duplicate rather than a generic
+    // repository, since EF Core's DbSet<T> access doesn't generalize cleanly here and
+    // this method's enrichment rules are complex enough that a shared/generic version
+    // would obscure more than it'd save.
+    public async Task<List<(string AccNum, string CustomerID, string DisbDate, string FieldAdded)>>
+        SaveExcelDataToDatabaseIndMobile(IEnumerable<DBIndividualContext> dataFromExcel, string fileShortName)
+    {
+        _context.ChangeTracker.Clear();
+
+        var subscriber = await GetFileShortCodeFromFileName(fileShortName);
+        var now        = DateTime.Now;
+        var reportingPeriod = GetReportingPeriodLabel(fileShortName);
+        var changelog  = new List<(string, string, string, string)>();
+
+        var existing = await _context.IndividualsMobileData
+            .Where(r => r.SubscriberCode == subscriber)
+            .ToListAsync();
+
+        var existingIndex = existing
+            .GroupBy(r => (Norm(r.CreditFacilityAccNum), Norm(r.CustomerID), Norm(r.DisbursementDate)))
+            .ToDictionary(g => g.Key, g => PickCanonicalIndividualRef(g));
+
+        var toInsert = new List<IndividualMobileRef>();
+        var toUpdate = new List<IndividualMobileRef>();
+
+        foreach (var item in dataFromExcel)
+        {
+            var key = (Norm(item.CreditFacilityAccNum),
+                       Norm(item.CustomerID),
+                       Norm(item.DisbursementDate));
+
+            if (existingIndex.TryGetValue(key, out var dbRow))
+            {
+                string? natID = dbRow.NatIDNum, votersID = dbRow.VotersIDNum,
+                        driverLic = dbRow.DriverLicNum, passport = dbRow.PassportNum,
+                        ssNum = dbRow.SSNum, ezwich = dbRow.EzwichNum, otherID = dbRow.OtherIDNum;
+                string? surname = dbRow.Surname, firstName = dbRow.FirstName, middleNames = dbRow.MiddleNames;
+
+                bool changed = false;
+                changed |= EnrichField(ref natID,     item.NatIDNum,     "NatIDNum",     key.Item1, key.Item2, key.Item3, changelog);
+                changed |= EnrichField(ref votersID,  item.VotersIDNum,  "VotersIDNum",  key.Item1, key.Item2, key.Item3, changelog);
+                changed |= EnrichField(ref driverLic, item.DriverLicNum, "DriverLicNum", key.Item1, key.Item2, key.Item3, changelog);
+                changed |= EnrichField(ref passport,  item.PassportNum,  "PassportNum",  key.Item1, key.Item2, key.Item3, changelog);
+                changed |= EnrichField(ref ssNum,     item.SSNum,        "SSNum",        key.Item1, key.Item2, key.Item3, changelog);
+                changed |= EnrichField(ref ezwich,    item.EzwichNum,    "EzwichNum",    key.Item1, key.Item2, key.Item3, changelog);
+                changed |= EnrichField(ref otherID,   item.OtherIDNum,   "OtherIDNum",   key.Item1, key.Item2, key.Item3, changelog);
+                changed |= EnrichField(ref surname,     item.Surname,     "Surname",     key.Item1, key.Item2, key.Item3, changelog);
+                changed |= EnrichField(ref firstName,   item.FirstName,   "FirstName",   key.Item1, key.Item2, key.Item3, changelog);
+                changed |= EnrichField(ref middleNames, item.MiddleNames, "MiddleNames", key.Item1, key.Item2, key.Item3, changelog);
+
+                if (changed)
+                {
+                    dbRow.NatIDNum = natID; dbRow.VotersIDNum = votersID;
+                    dbRow.DriverLicNum = driverLic; dbRow.PassportNum = passport;
+                    dbRow.SSNum = ssNum; dbRow.EzwichNum = ezwich; dbRow.OtherIDNum = otherID;
+                    dbRow.Surname = surname; dbRow.FirstName = firstName; dbRow.MiddleNames = middleNames;
+                    dbRow.LastUpdatedDate = now;
+                    toUpdate.Add(dbRow);
+                }
+                if (!string.IsNullOrWhiteSpace(item.DateOfBirth) && string.IsNullOrWhiteSpace(dbRow.DateOfBirth))
+                {
+                    dbRow.DateOfBirth = item.DateOfBirth;
+                    dbRow.LastUpdatedDate = now;
+                    if (!toUpdate.Contains(dbRow)) toUpdate.Add(dbRow);
+                }
+                else if (!string.IsNullOrWhiteSpace(item.DateOfBirth) && dbRow.DateOfBirth != item.DateOfBirth)
+                {
+                    await RecordOrRefreshDobConflictAsync("IndividualMobile", subscriber, dbRow.CustomerID, dbRow.CreditFacilityAccNum, dbRow.DisbursementDate,
+                        dbRow.DateOfBirth, item.DateOfBirth, fileShortName);
+                }
+
+                if (!string.IsNullOrWhiteSpace(item.FacilityStatusCode) && dbRow.FacilityStatusCode != item.FacilityStatusCode)
+                {
+                    dbRow.FacilityStatusCode = item.FacilityStatusCode;
+                    dbRow.LastUpdatedDate = now;
+                    if (!toUpdate.Contains(dbRow)) toUpdate.Add(dbRow);
+                }
+
+                if (dbRow.LastConfirmedReportingPeriod != reportingPeriod)
+                {
+                    dbRow.LastConfirmedReportingPeriod = reportingPeriod;
+                    if (!toUpdate.Contains(dbRow)) toUpdate.Add(dbRow);
+                }
+            }
+            else
+            {
+                toInsert.Add(new IndividualMobileRef
+                {
+                    SubscriberCode       = subscriber,
+                    CreditFacilityAccNum = item.CreditFacilityAccNum        ?? string.Empty,
+                    CustomerID           = item.CustomerID                  ?? string.Empty,
+                    DisbursementDate     = item.DisbursementDate             ?? string.Empty,
+                    DateOfBirth          = item.DateOfBirth                  ?? string.Empty,
+                    NatIDNum             = item.NatIDNum                    ?? string.Empty,
+                    VotersIDNum          = item.VotersIDNum                 ?? string.Empty,
+                    DriverLicNum         = item.DriverLicNum                ?? string.Empty,
+                    PassportNum          = item.PassportNum                 ?? string.Empty,
+                    SSNum                = item.SSNum                       ?? string.Empty,
+                    EzwichNum            = item.EzwichNum                   ?? string.Empty,
+                    OtherIDNum           = item.OtherIDNum                  ?? string.Empty,
+                    Surname              = item.Surname                    ?? string.Empty,
+                    FirstName            = item.FirstName                  ?? string.Empty,
+                    MiddleNames          = item.MiddleNames                ?? string.Empty,
+                    FacilityStatusCode   = item.FacilityStatusCode         ?? string.Empty,
+                    LastConfirmedReportingPeriod = reportingPeriod,
+                    CurrenVersion        = 1,
+                    CreatedDate          = now,
+                    LastUpdatedDate      = now
+                });
+            }
+        }
+
+        const int batchSize = 10_000;
+        for (int i = 0; i < toInsert.Count; i += batchSize)
+            await BulkInsertBatchINDMobile(toInsert.Skip(i).Take(batchSize).ToList());
+        if (toUpdate.Count > 0)
+            await _context.BulkUpdateAsync(toUpdate, new BulkConfig { BatchSize = 4000 });
+
+        return changelog;
+    }
+
+    public async Task<List<(string AccNum, string CustomerID, string DisbDate, string FieldAdded)>>
+        SaveExcelDataToDatabaseIndMobile(IEnumerable<IndividualContext> dataFromExcel, string fileShortName)
+    {
+        var mapped = dataFromExcel.Select(r => new DBIndividualContext
+        {
+            CreditFacilityAccNum = r.CreditFacilityAccNum?.Data ?? string.Empty,
+            CustomerID           = r.CustomerID?.Data           ?? string.Empty,
+            DisbursementDate     = r.DisbursementDate?.Data     ?? string.Empty,
+            DateOfBirth          = r.DateOfBirth?.Data          ?? string.Empty,
+            NatIDNum             = r.NatIDNum?.Data             ?? string.Empty,
+            VotersIDNum          = r.VotersIDNum?.Data          ?? string.Empty,
+            DriverLicNum         = r.DriverLicNum?.Data         ?? string.Empty,
+            PassportNum          = r.PassportNum?.Data          ?? string.Empty,
+            SSNum                = r.SSNum?.Data                ?? string.Empty,
+            EzwichNum            = r.EzwichNum?.Data            ?? string.Empty,
+            OtherIDNum           = r.OtherIDNum?.Data           ?? string.Empty,
+            Surname              = r.Surname?.Data              ?? string.Empty,
+            FirstName            = r.FirstName?.Data            ?? string.Empty,
+            MiddleNames          = r.MiddleNames?.Data          ?? string.Empty,
+            FacilityStatusCode   = r.FacilityStatusCode?.Data   ?? string.Empty,
+        });
+        return await SaveExcelDataToDatabaseIndMobile(mapped, fileShortName);
+    }
+
     // ── BUS Upsert ────────────────────────────────────────────────────────────
     public async Task SaveExcelDataToDatabaseBus(IEnumerable<DBBusinessContext> dataFromExcel, string fileShortName)
     {
@@ -356,13 +533,16 @@ public class DataManagementService
     // both the save/enrich path (SaveExcelDataToDatabaseInd) and the reference
     // cross-check (BuildReferenceVirtualRecordsInd) so they never disagree on
     // which row is "the" reference for a given key.
-    public static bool IsBlankIndividualIdentity(IndividualRef r) =>
+    public static bool IsBlankIndividualIdentity(IIndividualReferenceRow r) =>
         string.IsNullOrWhiteSpace(r.DateOfBirth) &&
         string.IsNullOrWhiteSpace(r.Surname) &&
         string.IsNullOrWhiteSpace(r.FirstName) &&
         string.IsNullOrWhiteSpace(r.MiddleNames);
 
-    public static IndividualRef PickCanonicalIndividualRef(IEnumerable<IndividualRef> duplicates)
+    // Generic over IIndividualReferenceRow so IndividualRef (regular Individual
+    // channel) and IndividualMobileRef (Mobile channel) share this exact same
+    // rule without duplicating it.
+    public static T PickCanonicalIndividualRef<T>(IEnumerable<T> duplicates) where T : IIndividualReferenceRow
     {
         var rows = duplicates.ToList();
         var withData = rows.Where(r => !IsBlankIndividualIdentity(r)).ToList();
@@ -520,6 +700,15 @@ public class DataManagementService
 
     //SHARED FUNCTION INDIVIDUAL
     private async Task BulkInsertBatchIND(List<IndividualRef> batch)
+    {
+        await _context.BulkInsertAsync(batch, new BulkConfig
+        {
+            BatchSize = 4000,
+            EnableStreaming = true,
+            BulkCopyTimeout = 3600 // 1 hour
+        });
+    }
+    private async Task BulkInsertBatchINDMobile(List<IndividualMobileRef> batch)
     {
         await _context.BulkInsertAsync(batch, new BulkConfig
         {
@@ -1084,6 +1273,14 @@ public class DataManagementService
             applied = row != null;
             if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
         }
+        else if (conflict.EntityType == "IndividualMobile")
+        {
+            var row = await _context.IndividualsMobileData.FirstOrDefaultAsync(r =>
+                r.SubscriberCode == conflict.SubscriberCode && r.CustomerID == conflict.CustomerID &&
+                r.CreditFacilityAccNum == conflict.CreditFacilityAccNum && r.DisbursementDate == conflict.DisbursementDate);
+            applied = row != null;
+            if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
+        }
         else
         {
             var row = await _context.BusinessesData.FirstOrDefaultAsync(r =>
@@ -1109,6 +1306,11 @@ public class DataManagementService
             .Where(r => r.SubscriberCode == subscriberCode && r.CustomerID == customerId)
             .ToListAsync();
 
+    public async Task<List<IndividualMobileRef>> SearchIndividualMobileRefAsync(string subscriberCode, string customerId) =>
+        await _context.IndividualsMobileData
+            .Where(r => r.SubscriberCode == subscriberCode && r.CustomerID == customerId)
+            .ToListAsync();
+
     public async Task<List<BusinessRef>> SearchBusinessRefAsync(string subscriberCode, string customerId) =>
         await _context.BusinessesData
             .Where(r => r.SubscriberCode == subscriberCode && r.CustomerID == customerId)
@@ -1118,6 +1320,18 @@ public class DataManagementService
         string driverLic, string passport, string ssNum, string ezwich, string otherId)
     {
         var row = await _context.IndividualsData.FindAsync(id);
+        if (row == null) return;
+        row.DateOfBirth = dob;
+        row.NatIDNum = natId; row.VotersIDNum = votersId; row.DriverLicNum = driverLic;
+        row.PassportNum = passport; row.SSNum = ssNum; row.EzwichNum = ezwich; row.OtherIDNum = otherId;
+        row.LastUpdatedDate = DateTime.Now;
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateIndividualMobileRefIdentityAsync(int id, string dob, string natId, string votersId,
+        string driverLic, string passport, string ssNum, string ezwich, string otherId)
+    {
+        var row = await _context.IndividualsMobileData.FindAsync(id);
         if (row == null) return;
         row.DateOfBirth = dob;
         row.NatIDNum = natId; row.VotersIDNum = votersId; row.DriverLicNum = driverLic;
@@ -1197,9 +1411,29 @@ public class DataManagementService
                     await ResolveMatchingConflict("Business", row.SubscriberCode, row.CustomerID, row.CreditFacilityAccNum, row.DisbursementDate);
                     result.Applied++;
                 }
+                else if (string.Equals(row.EntityType, "IndividualMobile", StringComparison.OrdinalIgnoreCase))
+                {
+                    var dbRow = await _context.IndividualsMobileData.FirstOrDefaultAsync(r =>
+                        r.SubscriberCode == row.SubscriberCode && r.CustomerID == row.CustomerID &&
+                        r.CreditFacilityAccNum == row.CreditFacilityAccNum && r.DisbursementDate == row.DisbursementDate);
+                    if (dbRow == null) { result.NotFound++; continue; }
+
+                    if (!string.IsNullOrWhiteSpace(row.DateOfBirth)) dbRow.DateOfBirth = row.DateOfBirth;
+                    if (!string.IsNullOrWhiteSpace(row.NatIDNum)) dbRow.NatIDNum = row.NatIDNum;
+                    if (!string.IsNullOrWhiteSpace(row.VotersIDNum)) dbRow.VotersIDNum = row.VotersIDNum;
+                    if (!string.IsNullOrWhiteSpace(row.DriverLicNum)) dbRow.DriverLicNum = row.DriverLicNum;
+                    if (!string.IsNullOrWhiteSpace(row.PassportNum)) dbRow.PassportNum = row.PassportNum;
+                    if (!string.IsNullOrWhiteSpace(row.SSNum)) dbRow.SSNum = row.SSNum;
+                    if (!string.IsNullOrWhiteSpace(row.EzwichNum)) dbRow.EzwichNum = row.EzwichNum;
+                    if (!string.IsNullOrWhiteSpace(row.OtherIDNum)) dbRow.OtherIDNum = row.OtherIDNum;
+                    dbRow.LastUpdatedDate = DateTime.Now;
+
+                    await ResolveMatchingConflict("IndividualMobile", row.SubscriberCode, row.CustomerID, row.CreditFacilityAccNum, row.DisbursementDate);
+                    result.Applied++;
+                }
                 else
                 {
-                    result.Errors.Add($"Row for CustomerID '{row.CustomerID}': unrecognized EntityType '{row.EntityType}' (expected Individual or Business)");
+                    result.Errors.Add($"Row for CustomerID '{row.CustomerID}': unrecognized EntityType '{row.EntityType}' (expected Individual, Business, or IndividualMobile)");
                 }
             }
             catch (Exception ex)

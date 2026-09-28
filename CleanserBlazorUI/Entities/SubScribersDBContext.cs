@@ -378,7 +378,7 @@ public class BusinessRef
     // ── Closed-facility tracking ────────────────────────────────────────────
     public string? FacilityStatusCode { get; set; } = string.Empty;
 }
-public class IndividualRef
+public class IndividualRef : IIndividualReferenceRow
 {
     public int Id { get; set; }
     public int CurrenVersion { get; set; }

@@ -3921,6 +3921,177 @@
             }
             return CleaningStatus.CompletedWithUnknownErrors;
         }
+        if (id == 7)
+        {
+            // Individual Records Mobile -- exact duplicate of the id==1 (Individual)
+            // branch above, same file schema and same IndividualContext type, but
+            // reading/writing the separate IndividualsMobileData reference table
+            // instead of IndividualsData so the two channels never cross-contaminate.
+            try
+            {
+                // Resetting variables
+                FileName = string.Empty; FileSize = default; FileSizeInString = string.Empty; string extension = string.Empty;
+                extension = Path.GetExtension(browserFile.Name);
+                if (browserFile != null && extension == ".xlsx")
+                {
+                    FileName = browserFile.Name; FileSize = browserFile.Size; FileSizeInString = $"{streamHelper.ConvertLongToMB(FileSize).ToString()}MB";
+
+                    // Define a secure directory path (outside wwwroot for security)
+                    string uploadDirectory = Path.Combine(Environment.WebRootPath, UPLOADED_FILE_DIRECTORY);
+                    // Ensure the directory exists
+                    if (!Directory.Exists(uploadDirectory)) { Directory.CreateDirectory(uploadDirectory); }
+
+                    // Already saved to disk by the plain-HTTP upload endpoint at
+                    // selection time (see REF_FileUpload) -- only falls back to the
+                    // old OpenReadStream-over-SignalR path if that upload didn't
+                    // happen for this file (e.g. the endpoint was unreachable).
+                    if (!string.IsNullOrWhiteSpace(fileItem.TempFilePath))
+                    {
+                        FullExcelDataFilePath = fileItem.TempFilePath;
+                    }
+                    else
+                    {
+                        using var filestream = browserFile.OpenReadStream(MAX_FILESIZE);
+                        var randomFileName = $"{Path.GetRandomFileName()}_____{FileName}";
+                        FullExcelDataFilePath = Path.Combine(uploadDirectory, Path.ChangeExtension(randomFileName, extension));
+                        using var fallbackDestination = new FileStream(FullExcelDataFilePath, FileMode.Create);
+                        await filestream.CopyToAsync(fallbackDestination);
+                    }
+                    using var destinationStream = new FileStream(FullExcelDataFilePath, FileMode.Open, FileAccess.Read);
+
+                    var (ExcelDataRecieved, SpreadSheetStatus) = await ReadFromExcelAsync<IndividualContext>(destinationStream, FileName);
+                    CleanserBlazorUI.DevelopmentFolder.ExtractSpreadSheetHeader.HeaderExtracter(destinationStream);
+                    var numberOfHeaderErrors = SpreadSheetStatus.InvalidHeaders.Count;
+                    if (numberOfHeaderErrors >= 1)
+                    {
+                        AlertSeverityVisible = "d-block";
+                        AlertSeverityMessage = "Warning: The uploaded spreadsheet(s) does not contains the expected headers";
+                        AlertSeverity = MudBlazor.Severity.Warning;
+                        StateHasChanged();
+                        failedRecord.Add(SingleSheetRecords);
+                        fullFailedFilesPaths.Add(FullExcelDataFilePath);
+                        GetErrorsPairs = new List<ErrorsPairs>();
+                        GetErrorsPairs = SpreadSheetStatus.InvalidHeaders;
+                        GetErrorsPairsList.Add(GetErrorsPairs);
+                    }
+                    else
+                    {
+                        AlertSeverityMessage = "Success: The uploaded spreadsheet contains the expected headers";
+                        AlertSeverity = MudBlazor.Severity.Success;
+                        AlertSeverityVisible = "d-block";
+
+                        // Mapped into IndividualRef shape so the exact same matcher/
+                        // transformer and cross-record-check logic used for regular
+                        // Individual records can be reused unchanged (see
+                        // DataManagementService.MapMobileToIndividualRefShape).
+                        var RefDataMobile = await DataManagementService.GETReferenceData_INDMobile(filename);
+                        var RefData = DataManagementService.MapMobileToIndividualRefShape(RefDataMobile);
+                        isSubscriber_X_or_Y = await DataManagementService.GetSubscribeX_or_Y(filename);
+                        var (mainMatcherTransformer, _duplicatesInd, _correctDateOfBirth, _dobIssues, _matchdata, _newdata, _duplicateCount) = REF_MainMatcherTransformerInd_Clean_IND(RefData, ExcelDataRecieved);
+                        var mainMatcherTransformer_temp = DuplicateUser_CustomerIDAndDateOfBirth(mainMatcherTransformer);
+                        List<IndividualContext> referenceVirtualsInd = new();
+                        if (CleanOnlyOrCleanAndReference == false)
+                        {
+                            referenceVirtualsInd = BuildReferenceVirtualRecordsInd(mainMatcherTransformer_temp, RefData, out var previousNameByCustomer, out var previousDOBByCustomer, out var previousDOBReportingPeriodByCustomer);
+                            foreach (var rec in mainMatcherTransformer_temp)
+                            {
+                                var custKey = NormalizeCustomerId(rec.CustomerID?.Data);
+                                if (!string.IsNullOrWhiteSpace(custKey) && previousNameByCustomer.TryGetValue(custKey, out var prevName))
+                                {
+                                    rec.PreviousNameOnFile = prevName;
+                                }
+                                if (!string.IsNullOrWhiteSpace(custKey) && previousDOBByCustomer.TryGetValue(custKey, out var prevDob))
+                                {
+                                    rec.PreviousDOBOnFile = prevDob;
+                                    if (previousDOBReportingPeriodByCustomer.TryGetValue(custKey, out var prevDobPeriod))
+                                    {
+                                        rec.PreviousDOBReportingPeriod = prevDobPeriod;
+                                    }
+                                }
+                            }
+                            var forCrossChecksInd = mainMatcherTransformer_temp.Concat(referenceVirtualsInd).ToList();
+                            forCrossChecksInd = RunAllCrossRecordChecksIND(forCrossChecksInd);
+                            mainMatcherTransformer_temp = forCrossChecksInd.Except(referenceVirtualsInd).ToList();
+                        }
+                        else
+                        {
+                            mainMatcherTransformer_temp = RunAllCrossRecordChecksIND(mainMatcherTransformer_temp);
+                        }
+                        mainMatcherTransformer = mainMatcherTransformer_temp;
+                        correctDateOfBirth = _correctDateOfBirth;
+                        dobIssues = _dobIssues;
+                        matchdata = _matchdata;
+                        newdata = _newdata;
+                        duplicateCount = _duplicateCount;
+
+                        _lastUnlBatchInd = mainMatcherTransformer.Where(r => !ISCleaned(r)).ToList();
+                        _lastDuplicateCountInd = _duplicatesInd?.Count ?? 0;
+                        _lastTotalRecordsInd = mainMatcherTransformer.Count + _lastDuplicateCountInd;
+                        _lastUnlFilename = filename;
+                        _lastUnlDataType = "IND";
+                        _lastUnlSubcode = await DataManagementService.GetFileShortCodeFromFileName(filename);
+
+                        foreach (var r in _lastUnlBatchInd)
+                        {
+                            var incomingDob = (r.DateOfBirth?.Data ?? string.Empty).Trim();
+                            if (!string.IsNullOrWhiteSpace(r.PreviousDOBOnFile) && !string.IsNullOrWhiteSpace(incomingDob) &&
+                                !string.Equals(r.PreviousDOBOnFile, incomingDob, StringComparison.Ordinal))
+                            {
+                                await DataManagementService.RecordOrRefreshDobConflictAsync(
+                                    "IndividualMobile", _lastUnlSubcode,
+                                    (r.CustomerID?.Data ?? string.Empty).Trim(),
+                                    (r.CreditFacilityAccNum?.Data ?? string.Empty).Trim(),
+                                    (r.DisbursementDate?.Data ?? string.Empty).Trim(),
+                                    r.PreviousDOBOnFile, incomingDob, filename);
+                            }
+                        }
+
+                        var unlFDate = stringHelper.GetFacilityDateFromFileName(filename, true);
+                        if (unlFDate.IsValid && DateTime.TryParseExact(unlFDate.LastDate, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var unlParsedDate))
+                        {
+                            _lastUnlReportingPeriod = unlParsedDate.ToString("MMMM yyyy");
+                            _lastUnlReportingYear = unlParsedDate.Year.ToString();
+                            _lastUnlMonths = unlParsedDate.ToString("MMMM");
+                            _lastUnlLogYear = unlParsedDate.Year.ToString();
+                        }
+                        var unlExistingProfile = await DataManagementService.GetSubscriberProfileAsync(_lastUnlSubcode);
+                        UnlLogSubscriberName = unlExistingProfile?.SubscriberName ?? string.Empty;
+                        UnlLogInstitutionType = unlExistingProfile?.InstitutionType ?? string.Empty;
+                        unlLogPanelView = _lastUnlBatchInd.Count > 0 ? "d-block" : "d-none";
+
+                        var trulyCleanInd = mainMatcherTransformer.Where(r => ISCleaned(r)).ToList();
+
+                        if (CleanOnlyOrCleanAndReference == false)
+                        {
+                            var idChangelog = await DataManagementService.SaveExcelDataToDatabaseIndMobile(trulyCleanInd, filename);
+                        }
+
+                        var closedRecordsInd = ExtractClosedFacilitiesInd(trulyCleanInd, RefData);
+                        if (closedRecordsInd.Count > 0)
+                        {
+                            mainMatcherTransformer = mainMatcherTransformer.Except(closedRecordsInd).ToList();
+                        }
+                        destinationStream.Dispose();
+                        byte[] ExcelDataTobeDownloaded = await SaveToExcelAsync(mainMatcherTransformer, _duplicatesInd, closedRecordsInd);
+                        await DownloadExcelDataStream(ExcelDataTobeDownloaded, FullExcelDataFilePath);
+                        try { File.Delete(FullExcelDataFilePath!); } catch { /* non-fatal, swept later */ }
+                        StateHasChanged();
+                        ExcelDataRecieved.Clear();
+                        ExcelDataRecieved = null;
+                        AlertSeverityVisible = "d-none";
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                AlertSeverityMessage = $"Cleaning failed: {ex.Message}";
+                AlertSeverity = MudBlazor.Severity.Error;
+                AlertSeverityVisible = "d-block";
+                StateHasChanged();
+            }
+            return CleaningStatus.CompletedWithUnknownErrors;
+        }
         if (id == 2)
         {
             try

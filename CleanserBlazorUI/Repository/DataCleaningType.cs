@@ -11,6 +11,7 @@ public class DataCleaningType
             new DataCleaningTypeModel { Id= 4, IdShortName = "bdu",  Title = "4. BUSINESS RECORDS DUD"},
             new DataCleaningTypeModel { Id= 5, IdShortName = "iju",  Title = "5. INDIVIDUAL RECORDS (JUD)"},
             new DataCleaningTypeModel { Id= 6, IdShortName = "bju",  Title = "6. BUSINESS RECORDS (JUD)"},
+            new DataCleaningTypeModel { Id= 7, IdShortName = "inm",  Title = "7. INDIVIDUAL RECORDS MOBILE"},
         };
         return getDataCleanings;
     }

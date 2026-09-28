@@ -87,6 +87,11 @@
         ws.Cell(3, 14).Value = "BN123456"; // Busregnum
         ws.Cell(3, 15).Value = "TIN123456"; // Tinum
 
+        // Individual Mobile -- separate reference table from Individual, so this
+        // never touches a regular Individual record even with the same CustomerID.
+        var indMobileExample = new[] { "IndividualMobile", "ABC", "789012", "ABC-NW-789012", "20231130", "19950615" };
+        for (int i = 0; i < indMobileExample.Length; i++) ws.Cell(4, i + 1).Value = indMobileExample[i];
+
         ws.Columns().AdjustToContents();
 
         using var ms = new MemoryStream();
