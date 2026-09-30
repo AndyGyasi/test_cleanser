@@ -19,7 +19,19 @@
 <div>
     <div style="width:100%; background: #001D23">
         <MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Buffer="true" Class="@progressIsVisible" Style="margin-top: 10px; margin-bottom: 0px;" />
+        @* Indeterminate until the file's total row count is known (right at the
+           start of reading it), then switches to a real percentage. *@
+        <MudProgressLinear Indeterminate="@(currentFileTotalRows == 0)" Value="@CurrentFileProgressPercent" Color="Color.Primary" Buffer="true" Class="@progressIsVisible" Style="margin-top: 10px; margin-bottom: 0px;" />
+        <MudText Class="@progressIsVisible" Typo="Typo.caption" Style="margin-top: 2px;">
+            @if (currentFileTotalRows > 0)
+            {
+                @($"{CurrentFileProgressPercent:0}% — {currentFileRowsRead:N0} of {currentFileTotalRows:N0} records — {_elapsedTime:mm\\:ss} elapsed")
+            }
+            else
+            {
+                @($"Reading file… {_elapsedTime:mm\\:ss} elapsed")
+            }
+        </MudText>
         <style>
             .format-pills { display:flex; gap:2px; background: var(--mud-palette-background-grey, #0F2225); border:1px solid var(--mud-palette-lines-default, #22383B); border-radius:8px; padding:3px; margin-bottom:14px; width: fit-content; }
             .format-pill { font-size:13px; padding:9px 16px; border-radius:6px; border:none; background:transparent; color: var(--mud-palette-text-secondary, #93A29C); cursor:pointer; font-family: inherit; }
@@ -298,9 +310,23 @@
     string AlertSeverityMessage;
     System.Timers.Timer _timer;
     TimeSpan _elapsedTime = TimeSpan.Zero;
+    // Real wall-clock start time instead of accumulating a fixed increment per
+    // tick -- timer callbacks aren't guaranteed to fire exactly on schedule, so
+    // accumulation drifts from actual elapsed time on a long-running file.
+    DateTime? _processingStartedAt;
     bool _isRunning = false;
     int writeCounting = 0;
     int readCounting = 0;
+    // Per-file upload/read progress -- reset at the start of each file's
+    // ReadFromExcelAsync/REFReadFromExcelAsync call, incremented alongside the
+    // existing readCounting at every row processed. readCounting itself stays
+    // cumulative across a whole multi-file Run Cleanser batch (existing "TOTAL"
+    // display depends on that), so this is a separate pair of counters rather
+    // than repurposing it.
+    int currentFileTotalRows = 0;
+    int currentFileRowsRead = 0;
+    double CurrentFileProgressPercent =>
+        currentFileTotalRows > 0 ? Math.Min(100.0, 100.0 * currentFileRowsRead / currentFileTotalRows) : 0;
     ElementReference DropZone;
     bool _jsInitialized = false;
     bool PRINT_EXCEL_WITH_SECURED_NAME = false;
@@ -1001,6 +1027,11 @@
             {
                 var ws = wb.Worksheet(1);
                 var rows = ws.RowsUsed().ToList();
+                // Known immediately, well before the per-row loop below starts --
+                // lets the progress bar show a real percentage instead of an
+                // indeterminate spinner.
+                currentFileTotalRows = Math.Max(rows.Count - 1, 0);
+                currentFileRowsRead = 0;
                 var headerRow = ws.Row(1);
                 if (headerRow == null) { return (excelDataReceived, spreadSheetStatus); }
                 var actualHeaders = headerRow.Cells().Select(cell => cell.GetValue<string>().Trim().ToLower().Replace(" ", "")).ToList();
@@ -1182,6 +1213,10 @@
                             excelDataReceived.Add(newItem);
                         }
                         processedRows += chunkSize;
+                        // Updated once per chunk (100 rows), not once per row --
+                        // counting every single record while it loads was the
+                        // actual cost, not the occasional UI refresh itself.
+                        currentFileRowsRead = Math.Min(processedRows, currentFileTotalRows);
                     }
                 }
                 else if (exceltype == "ind")
@@ -1382,6 +1417,10 @@
                         }
 
                         processedRows += chunkSize;
+                        // Updated once per chunk (100 rows), not once per row --
+                        // counting every single record while it loads was the
+                        // actual cost, not the occasional UI refresh itself.
+                        currentFileRowsRead = Math.Min(processedRows, currentFileTotalRows);
                     }
                 }
             }
@@ -1956,8 +1995,12 @@
                 bool isOverdraft = (excelRecord.CreditFacilityType?.Data ?? string.Empty)
                     .Trim().ToUpperInvariant() == "V";
 
-                var dbRecord = dbRecords.FirstOrDefault(r => r.DisbursementDate == disbursementDate)
-                                ?? dbRecords[0];
+                // Same canonical-row rule as the IND matcher -- prefer a row with
+                // real data over a blank legacy duplicate, not just whichever the
+                // database happened to return first.
+                var exactDateMatches = dbRecords.Where(r => r.DisbursementDate == disbursementDate).ToList();
+                var dbRecord = DataManagementService.PickCanonicalBusinessRef(
+                    exactDateMatches.Count > 0 ? exactDateMatches : dbRecords);
 
                 bool dateOnFile = dbRecords.Any(r => r.DisbursementDate == disbursementDate);
 
@@ -3537,8 +3580,13 @@
 
                 // Prefer the historical row matching this exact date (for DOB comparison / name);
                 // fall back to any row on file for the facility if this date is genuinely new.
-                var dbRecord = dbRecords.FirstOrDefault(r => r.DisbursementDate == disbursementDate)
-                                ?? dbRecords[0];
+                // Within whichever candidate set that leaves, pick canonically (real
+                // data over a blank legacy duplicate) rather than just the first one
+                // the database happened to return -- same rule used when saving/
+                // enriching, so the two never disagree on which row is authoritative.
+                var exactDateMatches = dbRecords.Where(r => r.DisbursementDate == disbursementDate).ToList();
+                var dbRecord = DataManagementService.PickCanonicalIndividualRef(
+                    exactDateMatches.Count > 0 ? exactDateMatches : dbRecords);
 
                 // ── Sprint 10: Store reference canonical name for validation pass ──
                 // If the reference has name data, record it so the validation pass
@@ -3854,7 +3902,11 @@
                             }
                         }
 
-                        var unlFDate = stringHelper.GetFacilityDateFromFileName(filename, true);
+                        // false -- labeling which month this file represents, not
+                        // comparing a disbursement date (that's what the 15-day
+                        // grace variant is for). Was showing "February" for a file
+                        // whose own name said "0126" (January).
+                        var unlFDate = stringHelper.GetFacilityDateFromFileName(filename, false);
                         if (unlFDate.IsValid && DateTime.TryParseExact(unlFDate.LastDate, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var unlParsedDate))
                         {
                             _lastUnlReportingPeriod = unlParsedDate.ToString("MMMM yyyy");
@@ -4046,7 +4098,11 @@
                             }
                         }
 
-                        var unlFDate = stringHelper.GetFacilityDateFromFileName(filename, true);
+                        // false -- labeling which month this file represents, not
+                        // comparing a disbursement date (that's what the 15-day
+                        // grace variant is for). Was showing "February" for a file
+                        // whose own name said "0126" (January).
+                        var unlFDate = stringHelper.GetFacilityDateFromFileName(filename, false);
                         if (unlFDate.IsValid && DateTime.TryParseExact(unlFDate.LastDate, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var unlParsedDate))
                         {
                             _lastUnlReportingPeriod = unlParsedDate.ToString("MMMM yyyy");
@@ -4188,7 +4244,8 @@
                         _lastUnlFilename = filename;
                         _lastUnlDataType = "BUS";
                         _lastUnlSubcode = await DataManagementService.GetFileShortCodeFromFileName(filename);
-                        var unlFDateBus = stringHelper.GetFacilityDateFromFileName(filename, true);
+                        // false -- see the IND UNL label fix above; same bug, same reason.
+                        var unlFDateBus = stringHelper.GetFacilityDateFromFileName(filename, false);
                         if (unlFDateBus.IsValid && DateTime.TryParseExact(unlFDateBus.LastDate, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var unlParsedDateBus))
                         {
                             _lastUnlReportingPeriod = unlParsedDateBus.ToString("MMMM yyyy");
@@ -4487,6 +4544,8 @@
         correctDateOfBirth = dobIssues = matchdata = newdata = duplicateCount = "0";
         writeCounting = 0;
         readCounting = 0;
+        currentFileTotalRows = 0;
+        currentFileRowsRead = 0;
         currentRowCount = currentFileCount = numberofFileswithoutreference = 0;
         _processing = true;
         StartTimer();
@@ -4531,6 +4590,11 @@
 
                 // Get all used rows. Alternatively, use ws.Rows() if you want every row.
                 var rows = ws.RowsUsed().ToList();
+                // Known immediately, well before the per-row loop below starts --
+                // lets the progress bar show a real percentage instead of an
+                // indeterminate spinner.
+                currentFileTotalRows = Math.Max(rows.Count - 1, 0);
+                currentFileRowsRead = 0;
                 var headerRow = ws.Row(1);
                 if (headerRow == null)
                 {
@@ -4743,6 +4807,10 @@
 
                         // Update processed rows counter.
                         processedRows += chunkSize;
+                        // Updated once per chunk (100 rows), not once per row --
+                        // counting every single record while it loads was the
+                        // actual cost, not the occasional UI refresh itself.
+                        currentFileRowsRead = Math.Min(processedRows, currentFileTotalRows);
 
                         // Optionally: You can add a delay, log progress, or even yield control here.
                     }
@@ -4970,6 +5038,10 @@
                         }
 
                         processedRows += chunkSize;
+                        // Updated once per chunk (100 rows), not once per row --
+                        // counting every single record while it loads was the
+                        // actual cost, not the occasional UI refresh itself.
+                        currentFileRowsRead = Math.Min(processedRows, currentFileTotalRows);
                     }
                 }
                 else if (typeof(T) == typeof(BusinessContextDud))
@@ -5055,6 +5127,10 @@
 
                         // Update processed rows counter.
                         processedRows += chunkSize;
+                        // Updated once per chunk (100 rows), not once per row --
+                        // counting every single record while it loads was the
+                        // actual cost, not the occasional UI refresh itself.
+                        currentFileRowsRead = Math.Min(processedRows, currentFileTotalRows);
 
                         // Optionally: You can add a delay, log progress, or even yield control here.
                     }
@@ -5166,6 +5242,10 @@
                         }
 
                         processedRows += chunkSize;
+                        // Updated once per chunk (100 rows), not once per row --
+                        // counting every single record while it loads was the
+                        // actual cost, not the occasional UI refresh itself.
+                        currentFileRowsRead = Math.Min(processedRows, currentFileTotalRows);
                     }
                 }
                 else if (typeof(T) == typeof(BusinessJudgementContext))
@@ -5246,6 +5326,10 @@
                         }
 
                         processedRows += chunkSize;
+                        // Updated once per chunk (100 rows), not once per row --
+                        // counting every single record while it loads was the
+                        // actual cost, not the occasional UI refresh itself.
+                        currentFileRowsRead = Math.Min(processedRows, currentFileTotalRows);
                     }
                 }
                 else if (typeof(T) == typeof(IndividualJudgementContext))
@@ -5354,6 +5438,10 @@
                         }
 
                         processedRows += chunkSize;
+                        // Updated once per chunk (100 rows), not once per row --
+                        // counting every single record while it loads was the
+                        // actual cost, not the occasional UI refresh itself.
+                        currentFileRowsRead = Math.Min(processedRows, currentFileTotalRows);
                     }
                 }
             }
@@ -7761,7 +7849,11 @@
                 bc.ReasonForWrittenOff.Data = string.Empty;
             }
 
-            if (bc != null && bc.DisburStatus != null && bc.DisbursementDate != null)
+            // bc.DisburStatus comes from comparing against the reference table
+            // (REF_MainMatcherTransformerInd_Clean_BUS) -- same reasoning as the
+            // DOB check above: Clean Only means no reference involvement in the
+            // pass/fail decision at all, not just no database writes.
+            if (bc != null && bc.DisburStatus != null && bc.DisbursementDate != null && CleanOnlyOrCleanAndReference == false)
             {
                 if (bc.DisburStatus.Length > 6)
                 {
@@ -8419,7 +8511,14 @@
                 ic.ReasonForWrittenOff.Data = string.Empty;
             }
             //RM
-            if (!string.IsNullOrWhiteSpace(ic.Status))
+            // ic.Status ("DOB") comes from the matcher (REF_MainMatcherTransformer_IND),
+            // which runs unconditionally because the NEW/MATCH/CORRECT DOB/DOBISSUES
+            // counts need it regardless of Clean Only. But actually FAILING the record
+            // over it is a reference comparison, same as the virtual-record check above
+            // -- and Clean Only means no reference involvement at all, not just no
+            // database writes. Applies to both Individual (id 1) and Individual Mobile
+            // (id 7): both are IndividualContext, so this one check covers both.
+            if (!string.IsNullOrWhiteSpace(ic.Status) && CleanOnlyOrCleanAndReference == false)
             {
                 ic.DateOfBirth.Passed = false;
                 ic.DateOfBirth.Errors = new List<string>() { "DATE OF BIRTH DOES NOT MATCH PREVIOUS SUBMISSION" };
@@ -8433,7 +8532,11 @@
 
             //BMMATCHING
 
-            if (ic != null && ic.DisburStatus != null && ic.DisbursementDate != null)
+            // ic.DisburStatus comes from comparing against the reference table
+            // (REF_MainMatcherTransformerInd_Clean_IND) -- same reasoning as the
+            // DOB check above. Covers Individual (id 1) and Individual Mobile
+            // (id 7) both, since this branch is type- not tab-dispatched.
+            if (ic != null && ic.DisburStatus != null && ic.DisbursementDate != null && CleanOnlyOrCleanAndReference == false)
             {
                 if (ic.DisburStatus.Length > 8)
                 {
@@ -9577,7 +9680,13 @@
 
 
         TopExpandPanelsContent = dataCleaningType.GetDataCleanings();
-        _timer = new System.Timers.Timer(5000);
+        // 500ms was too aggressive -- StateHasChanged on a component this size
+        // (re-rendering the whole page) every half-second measurably slowed the
+        // actual cleaning work down. Progress now also only advances once per
+        // 100-row chunk rather than every row, so there's less benefit to a very
+        // short interval anyway; 1s keeps the elapsed-time/progress display
+        // reasonably live without competing with the processing loop as much.
+        _timer = new System.Timers.Timer(1000);
         _timer.Elapsed += OnTimerElapsed;
         _timer.AutoReset = true;
 
@@ -9611,13 +9720,16 @@
     }
     async void OnTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
-        _elapsedTime = _elapsedTime.Add(TimeSpan.FromSeconds(5));
-        writeCounting = writeCounting;
-        readCounting = readCounting;
+        if (_processingStartedAt.HasValue)
+        {
+            _elapsedTime = DateTime.Now - _processingStartedAt.Value;
+        }
         await InvokeAsync(StateHasChanged);
     }
     void StartTimer()
     {
+        _processingStartedAt = DateTime.Now;
+        _elapsedTime = TimeSpan.Zero;
         _timer.Start();
         _isRunning = true;
     }
@@ -9629,6 +9741,7 @@
     void ResetTimer()
     {
         _elapsedTime = TimeSpan.Zero;
+        _processingStartedAt = null;
         StopTimer();
         StateHasChanged();
     }

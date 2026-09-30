@@ -546,8 +546,26 @@ public class DataManagementService
     {
         var rows = duplicates.ToList();
         var withData = rows.Where(r => !IsBlankIndividualIdentity(r)).ToList();
+        // LastUpdatedDate is tied (usually at its unset default) for every legacy
+        // duplicate that's never actually been enriched/updated -- without a
+        // second key, OrderBy's stable sort just keeps whatever order the
+        // database happened to return, not the most recently created row.
         return withData.Count > 0
-            ? withData.OrderByDescending(r => r.LastUpdatedDate).First()
+            ? withData.OrderByDescending(r => r.LastUpdatedDate).ThenByDescending(r => r.CreatedDate).First()
+            : rows.OrderByDescending(r => r.CreatedDate).First();
+    }
+
+    // Same rule as PickCanonicalIndividualRef, for Business duplicates (identity
+    // field is Businessname rather than DOB/Surname/FirstName/MiddleNames).
+    public static bool IsBlankBusinessIdentity(BusinessRef r) => string.IsNullOrWhiteSpace(r.Businessname);
+
+    public static BusinessRef PickCanonicalBusinessRef(IEnumerable<BusinessRef> duplicates)
+    {
+        var rows = duplicates.ToList();
+        var withData = rows.Where(r => !IsBlankBusinessIdentity(r)).ToList();
+        // Same reasoning as PickCanonicalIndividualRef -- see comment there.
+        return withData.Count > 0
+            ? withData.OrderByDescending(r => r.LastUpdatedDate).ThenByDescending(r => r.CreatedDate).First()
             : rows.OrderByDescending(r => r.CreatedDate).First();
     }
 
@@ -561,7 +579,11 @@ public class DataManagementService
     private string GetReportingPeriodLabel(string fileShortName)
     {
         var stringHelper = new StringHelper();
-        var facilityDate = stringHelper.GetFacilityDateFromFileName(fileShortName, true);
+        // false -- the true/15-day-grace variant is for comparing disbursement
+        // dates against the reporting period, not for labeling which month the
+        // file itself represents. LEA0126_IND -> January 2026 (last day of that
+        // month, no shift), not February from adding 15 days past Jan 31.
+        var facilityDate = stringHelper.GetFacilityDateFromFileName(fileShortName, false);
         if (facilityDate.IsValid &&
             DateTime.TryParseExact(facilityDate.LastDate, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
         {
@@ -1267,25 +1289,34 @@ public class DataManagementService
         bool applied;
         if (conflict.EntityType == "Individual")
         {
-            var row = await _context.IndividualsData.FirstOrDefaultAsync(r =>
+            var matches = await _context.IndividualsData.Where(r =>
                 r.SubscriberCode == conflict.SubscriberCode && r.CustomerID == conflict.CustomerID &&
-                r.CreditFacilityAccNum == conflict.CreditFacilityAccNum && r.DisbursementDate == conflict.DisbursementDate);
+                r.CreditFacilityAccNum == conflict.CreditFacilityAccNum && r.DisbursementDate == conflict.DisbursementDate)
+                .ToListAsync();
+            // Duplicates for this key resolve to the same canonical row the
+            // save/enrich path and matcher already agree on, not just whichever
+            // one the database returns first.
+            var row = matches.Count > 0 ? PickCanonicalIndividualRef(matches) : null;
             applied = row != null;
             if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
         }
         else if (conflict.EntityType == "IndividualMobile")
         {
-            var row = await _context.IndividualsMobileData.FirstOrDefaultAsync(r =>
+            var matches = await _context.IndividualsMobileData.Where(r =>
                 r.SubscriberCode == conflict.SubscriberCode && r.CustomerID == conflict.CustomerID &&
-                r.CreditFacilityAccNum == conflict.CreditFacilityAccNum && r.DisbursementDate == conflict.DisbursementDate);
+                r.CreditFacilityAccNum == conflict.CreditFacilityAccNum && r.DisbursementDate == conflict.DisbursementDate)
+                .ToListAsync();
+            var row = matches.Count > 0 ? PickCanonicalIndividualRef(matches) : null;
             applied = row != null;
             if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
         }
         else
         {
-            var row = await _context.BusinessesData.FirstOrDefaultAsync(r =>
+            var matches = await _context.BusinessesData.Where(r =>
                 r.SubscriberCode == conflict.SubscriberCode && r.CustomerID == conflict.CustomerID &&
-                r.CreditFacilityAccNum == conflict.CreditFacilityAccNum && r.DisbursementDate == conflict.DisbursementDate);
+                r.CreditFacilityAccNum == conflict.CreditFacilityAccNum && r.DisbursementDate == conflict.DisbursementDate)
+                .ToListAsync();
+            var row = matches.Count > 0 ? PickCanonicalBusinessRef(matches) : null;
             applied = row != null;
             if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
         }
@@ -1377,9 +1408,14 @@ public class DataManagementService
             {
                 if (string.Equals(row.EntityType, "Individual", StringComparison.OrdinalIgnoreCase))
                 {
-                    var dbRow = await _context.IndividualsData.FirstOrDefaultAsync(r =>
+                    var matches = await _context.IndividualsData.Where(r =>
                         r.SubscriberCode == row.SubscriberCode && r.CustomerID == row.CustomerID &&
-                        r.CreditFacilityAccNum == row.CreditFacilityAccNum && r.DisbursementDate == row.DisbursementDate);
+                        r.CreditFacilityAccNum == row.CreditFacilityAccNum && r.DisbursementDate == row.DisbursementDate)
+                        .ToListAsync();
+                    // Same canonical-row rule as everywhere else -- duplicates for
+                    // this key resolve to one agreed row, not whichever the
+                    // database returns first.
+                    var dbRow = matches.Count > 0 ? PickCanonicalIndividualRef(matches) : null;
                     if (dbRow == null) { result.NotFound++; continue; }
 
                     if (!string.IsNullOrWhiteSpace(row.DateOfBirth)) dbRow.DateOfBirth = row.DateOfBirth;
@@ -1397,9 +1433,11 @@ public class DataManagementService
                 }
                 else if (string.Equals(row.EntityType, "Business", StringComparison.OrdinalIgnoreCase))
                 {
-                    var dbRow = await _context.BusinessesData.FirstOrDefaultAsync(r =>
+                    var matches = await _context.BusinessesData.Where(r =>
                         r.SubscriberCode == row.SubscriberCode && r.CustomerID == row.CustomerID &&
-                        r.CreditFacilityAccNum == row.CreditFacilityAccNum && r.DisbursementDate == row.DisbursementDate);
+                        r.CreditFacilityAccNum == row.CreditFacilityAccNum && r.DisbursementDate == row.DisbursementDate)
+                        .ToListAsync();
+                    var dbRow = matches.Count > 0 ? PickCanonicalBusinessRef(matches) : null;
                     if (dbRow == null) { result.NotFound++; continue; }
 
                     // No DateOfBirth here -- Business records have no such column in
@@ -1413,9 +1451,11 @@ public class DataManagementService
                 }
                 else if (string.Equals(row.EntityType, "IndividualMobile", StringComparison.OrdinalIgnoreCase))
                 {
-                    var dbRow = await _context.IndividualsMobileData.FirstOrDefaultAsync(r =>
+                    var matches = await _context.IndividualsMobileData.Where(r =>
                         r.SubscriberCode == row.SubscriberCode && r.CustomerID == row.CustomerID &&
-                        r.CreditFacilityAccNum == row.CreditFacilityAccNum && r.DisbursementDate == row.DisbursementDate);
+                        r.CreditFacilityAccNum == row.CreditFacilityAccNum && r.DisbursementDate == row.DisbursementDate)
+                        .ToListAsync();
+                    var dbRow = matches.Count > 0 ? PickCanonicalIndividualRef(matches) : null;
                     if (dbRow == null) { result.NotFound++; continue; }
 
                     if (!string.IsNullOrWhiteSpace(row.DateOfBirth)) dbRow.DateOfBirth = row.DateOfBirth;
