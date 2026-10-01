@@ -1,153 +1,221 @@
-@* The app's single chrome element -- logo, dynamic nav, and the user/logout
-   footer all live here, inside MainLayout's MudDrawer. Sections and items
-   are loaded from the database (NavSection/NavItem) rather than hardcoded,
-   so admin can rename sections and drag pages between them from
-   /navigation-settings without a code change. Each section is its own
-   collapsible MudNavGroup, and renders only if at least one of its items is
-   visible to the current user's role. *@
-@inject DataManagementService DataManagementService
-@inject UserManager<ApplicationUser> UserManager
+@* The app's single navigation element, rendered statically inside MainLayout.
+   Sections and items come from the database (NavSection/NavItem), so admin can
+   rename sections and move pages between them from /navigation-settings
+   without a code change. A section only renders if at least one of its items
+   is visible to the current user's role. Collapse, search and the mobile
+   drawer are handled by _shell.js (plain DOM), so none of it depends on a
+   live circuit; only the theme switch is interactive. *@
+@inject IServiceScopeFactory ScopeFactory
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager NavigationManager
+@using CleanserBlazorUI.Services
 
-<div class="d-flex flex-column" style="height: 100%;">
-    <div class="pa-4">
-        <MudImage Src="logocolor.png" Height="36" />
+<aside class="cx-sidebar" aria-label="Main navigation">
+    <div class="cx-side-head">
+        <a href="" class="cx-logo" aria-label="XDS Data Ghana home"><img src="logocolor.png" alt="XDS Data Ghana" /></a>
+        <span class="cx-tag">Cleanser</span>
     </div>
 
-    <div class="px-4 pb-2">
-        <MudTextField T="string" @bind-Value="searchText" Placeholder="Search menu" Variant="Variant.Outlined"
-                      Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                      Immediate="true" Class="mud-width-full" />
+    <div class="cx-side-search">
+        <label class="cx-control">
+            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-3.5-3.5" /></svg>
+            <span class="cx-sr-only">Search menu</span>
+            <input type="search" id="cx-nav-search" placeholder="Search menu" autocomplete="off" />
+            <span class="cx-kbd">/</span>
+        </label>
     </div>
 
-    <MudNavMenu Class="flex-grow-1 px-2" style="overflow-y: auto;">
-        @foreach (var navSection in sections)
+    <nav class="cx-side-nav">
+        @foreach (var group in groups)
         {
-            var visibleItems = navSection.Items
-                .Where(IsVisible)
-                .Where(MatchesSearch)
-                .OrderBy(i => i.DisplayOrder)
-                .ToList();
-
-            if (visibleItems.Count > 0)
-            {
-                <MudNavGroup Title="@navSection.Title" Expanded="@IsExpanded(navSection.Id)"
-                             ExpandedChanged="@(v => expandedState[navSection.Id] = v)">
-                    @foreach (var item in visibleItems)
+            <div class="cx-nav-group@(IsClosed(group.Id) ? " closed" : "")" data-group="@group.Id">
+                <button type="button" class="cx-nav-group-btn" data-cx="toggle-group" aria-expanded="@(!IsClosed(group.Id) ? "true" : "false")">
+                    @group.Title
+                    <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+                <div class="cx-nav-items">
+                    @foreach (var item in group.Items)
                     {
-                        <MudNavLink Href="@item.Href" Match="@(item.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" Icon="@ResolveIcon(item.IconKey)">
-                            @item.Label
-                        </MudNavLink>
+                        var badge = BadgeFor(item);
+                        <a class="cx-nav-item" href="@item.Href" data-label="@item.Label.ToLowerInvariant()" aria-current="@(IsActive(item) ? "page" : null)">
+                            <MudIcon Icon="@ResolveIcon(item.IconKey)" Size="Size.Small" />
+                            <span class="cx-label">@item.Label</span>
+                            @if (badge is { Count: > 0 })
+                            {
+                                <span class="cx-badge @(badge.Warn ? "warn" : "")">@badge.Count.ToString("N0")</span>
+                            }
+                        </a>
                     }
-                </MudNavGroup>
-            }
-        }
-
-        <AuthorizeView Roles="admin">
-            <Authorized>
-                <MudNavGroup Title="Admin" Expanded="@IsExpanded(-1)" ExpandedChanged="@(v => expandedState[-1] = v)">
-                    <MudNavLink Href="navigation-settings" Icon="@Icons.Material.Filled.Tune">Manage Sidebar</MudNavLink>
-                </MudNavGroup>
-            </Authorized>
-        </AuthorizeView>
-    </MudNavMenu>
-
-    <MudDivider />
-
-    <AuthorizeView>
-        <Authorized>
-            <div class="pa-4 d-flex align-center">
-                <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-2">@Initial</MudAvatar>
-                <div class="flex-grow-1" style="min-width: 0;">
-                    <MudText Typo="Typo.body2" Class="text-truncate">@context.User.Identity?.Name</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate">@primaryRoleLabel</MudText>
                 </div>
             </div>
-            <div class="d-flex align-center px-4 pb-4" style="gap: 8px;">
-                <MudLink Href="Account/Manage" Typo="Typo.caption">Profile</MudLink>
-                <form action="Account/Logout" method="post">
-                    <AntiforgeryToken />
-                    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                    <button type="submit" style="background:none;border:none;padding:0;cursor:pointer;" class="mud-typography-caption mud-primary-text">Log out</button>
-                </form>
+        }
+    </nav>
+
+    <div class="cx-side-foot">
+        <ThemeSwitch @rendermode="InteractiveServer" InitialDark="@ThemeService.IsDark" />
+        <div class="cx-me">
+            <span class="cx-avatar">@initials</span>
+            <div class="cx-who">
+                <div>@email</div>
+                <div class="cx-hint">@roleLabel</div>
             </div>
-        </Authorized>
-        <NotAuthorized>
-            <div class="pa-4">
-                <MudButton Href="Account/Login" Color="Color.Primary" Variant="Variant.Filled" FullWidth="true">Login</MudButton>
-            </div>
-        </NotAuthorized>
-    </AuthorizeView>
-</div>
+            <form action="Account/Logout" method="post">
+                <AntiforgeryToken />
+                <input type="hidden" name="ReturnUrl" value="" />
+                <button type="submit" class="cx-icon-btn cx-outlined" aria-label="Log out">
+                    <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 17l5-5-5-5M15 12H4" /></svg>
+                </button>
+            </form>
+        </div>
+    </div>
+</aside>
 
 @code {
+    [Inject] private ThemeService ThemeService { get; set; } = default!;
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    // Short key -> icon (Material outlined, to match the line-icon look).
     // Keep in sync with NavigationSettings.razor's icon picker -- IconKey is
-    // stored as this short name (not a literal icon string) so it stays
-    // readable in the database and in the management UI.
+    // stored as this short name so it stays readable in the database.
     public static readonly Dictionary<string, string> IconMap = new()
     {
-        ["Person"] = Icons.Material.Filled.Person,
-        ["PersonAdd"] = Icons.Material.Filled.PersonAdd,
-        ["Group"] = Icons.Material.Filled.Group,
-        ["CleaningServices"] = Icons.Material.Filled.CleaningServices,
-        ["Business"] = Icons.Material.Filled.Business,
-        ["Rule"] = Icons.Material.Filled.Rule,
-        ["Schedule"] = Icons.Material.Filled.Schedule,
-        ["ReportProblem"] = Icons.Material.Filled.ReportProblem,
-        ["History"] = Icons.Material.Filled.History,
-        ["MenuBook"] = Icons.Material.Filled.MenuBook,
-        ["Badge"] = Icons.Material.Filled.Badge,
-        ["UploadFile"] = Icons.Material.Filled.UploadFile,
-        ["FactCheck"] = Icons.Material.Filled.FactCheck,
-        ["Message"] = Icons.Material.Filled.Message,
-        ["ErrorOutline"] = Icons.Material.Filled.ErrorOutline,
-        ["ListAlt"] = Icons.Material.Filled.ListAlt,
-        ["Settings"] = Icons.Material.Filled.Settings,
-        ["Folder"] = Icons.Material.Filled.Folder,
-        ["Link"] = Icons.Material.Filled.Link,
+        ["Person"] = Icons.Material.Outlined.Person,
+        ["PersonAdd"] = Icons.Material.Outlined.PersonAdd,
+        ["Group"] = Icons.Material.Outlined.Group,
+        ["CleaningServices"] = Icons.Material.Outlined.CleaningServices,
+        ["Business"] = Icons.Material.Outlined.Business,
+        ["Rule"] = Icons.Material.Outlined.Rule,
+        ["Schedule"] = Icons.Material.Outlined.Schedule,
+        ["ReportProblem"] = Icons.Material.Outlined.ReportProblem,
+        ["History"] = Icons.Material.Outlined.History,
+        ["MenuBook"] = Icons.Material.Outlined.MenuBook,
+        ["Badge"] = Icons.Material.Outlined.Badge,
+        ["UploadFile"] = Icons.Material.Outlined.UploadFile,
+        ["FactCheck"] = Icons.Material.Outlined.FactCheck,
+        ["Message"] = Icons.Material.Outlined.Message,
+        ["ErrorOutline"] = Icons.Material.Outlined.ErrorOutline,
+        ["ListAlt"] = Icons.Material.Outlined.ListAlt,
+        ["Settings"] = Icons.Material.Outlined.Settings,
+        ["Folder"] = Icons.Material.Outlined.Folder,
+        ["Link"] = Icons.Material.Outlined.Link,
+        ["Tune"] = Icons.Material.Outlined.Tune,
     };
 
     static string ResolveIcon(string? key) =>
-        !string.IsNullOrWhiteSpace(key) && IconMap.TryGetValue(key, out var icon) ? icon : Icons.Material.Filled.Circle;
+        !string.IsNullOrWhiteSpace(key) && IconMap.TryGetValue(key, out var icon) ? icon : Icons.Material.Outlined.Circle;
 
-    List<NavSection> sections = new();
-    HashSet<string> currentUserRoles = new();
-    string? currentUrl;
-    string Initial = "?";
-    string primaryRoleLabel = "User";
-    string searchText = "";
+    // Roles are shown most-privileged first; anything else falls back to its own name.
+    static readonly (string Role, string Label)[] RoleLabels =
+    {
+        ("admin", "Administrator"), ("superuser", "Superuser"), ("manager", "Manager"),
+        ("registrar", "Registrar"), ("user", "User"),
+    };
 
-    // Expanded/collapsed state per section (keyed by NavSection.Id, -1 for the
-    // built-in Admin group) -- defaults to expanded so nothing looks hidden
-    // on first load, same as the reference design.
-    readonly Dictionary<int, bool> expandedState = new();
-    bool IsExpanded(int sectionId) => !expandedState.TryGetValue(sectionId, out var expanded) || expanded;
+    record NavGroup(int Id, string Title, List<NavItem> Items);
+    record Badge(int Count, bool Warn);
+
+    List<NavGroup> groups = new();
+    HashSet<string> currentUserRoles = new(StringComparer.OrdinalIgnoreCase);
+    HashSet<string> closedGroups = new();
+    Dictionary<string, Badge> badges = new(StringComparer.OrdinalIgnoreCase);
+    string currentPath = "";
+    string email = "";
+    string initials = "?";
+    string roleLabel = "User";
 
     protected override async Task OnInitializedAsync()
     {
-        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        currentPath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri).Split('?', '#')[0].Trim('/');
 
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        if (authState.User.Identity?.IsAuthenticated == true)
+        // Collapsed sections live in a cookie (written by _shell.js) so the
+        // server renders the right state on first paint, with no flash.
+        var cookie = HttpContext?.Request.Cookies["cleanser-nav-closed"];
+        if (!string.IsNullOrWhiteSpace(cookie))
         {
-            var name = authState.User.Identity?.Name;
-            Initial = !string.IsNullOrWhiteSpace(name) ? name[..1].ToUpperInvariant() : "?";
-
-            var appUser = await UserManager.GetUserAsync(authState.User);
-            if (appUser != null)
-            {
-                currentUserRoles = new HashSet<string>(await UserManager.GetRolesAsync(appUser), StringComparer.OrdinalIgnoreCase);
-            }
-
-            var primaryRole = currentUserRoles.FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(primaryRole))
-            {
-                primaryRoleLabel = char.ToUpperInvariant(primaryRole[0]) + primaryRole[1..];
-            }
+            closedGroups = new HashSet<string>(Uri.UnescapeDataString(cookie).Split('|', StringSplitOptions.RemoveEmptyEntries));
         }
 
-        sections = await DataManagementService.GetNavSectionsAsync();
+        // The page being rendered alongside this menu shares the request's DbContext,
+        // and EF Core forbids two concurrent operations on one context -- so the menu
+        // does all its lookups in its own scope (own DbContext), never the page's.
+        using var scope = ScopeFactory.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var dataService = scope.ServiceProvider.GetRequiredService<DataManagementService>();
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        ApplicationUser? appUser = null;
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            email = authState.User.Identity?.Name ?? "";
+            initials = email.Length > 0 ? email[..1].ToUpperInvariant() : "?";
+
+            appUser = await userManager.GetUserAsync(authState.User);
+            if (appUser != null)
+            {
+                currentUserRoles = new HashSet<string>(await userManager.GetRolesAsync(appUser), StringComparer.OrdinalIgnoreCase);
+            }
+
+            roleLabel = RoleLabels.FirstOrDefault(r => currentUserRoles.Contains(r.Role)).Label
+                        ?? (currentUserRoles.FirstOrDefault() ?? "User");
+        }
+
+        var sections = await dataService.GetNavSectionsAsync();
+        groups = sections
+            .Select(s => new NavGroup(s.Id, s.Title, s.Items.Where(IsVisible).OrderBy(i => i.DisplayOrder).ToList()))
+            .Where(g => g.Items.Count > 0)
+            .ToList();
+
+        // Built-in admin-only group (not stored in NavSection, so it can't be removed by accident).
+        if (currentUserRoles.Contains("admin"))
+        {
+            groups.Add(new NavGroup(-1, "Admin", new List<NavItem>
+            {
+                new() { Label = "Manage sidebar", Href = "navigation-settings", IconKey = "Tune" }
+            }));
+        }
+
+        await LoadBadgesAsync(dataService, appUser);
+    }
+
+    // Counts are looked up by the item's page, so they follow the page even if
+    // an admin renames or moves it. A failing count never takes the menu down.
+    async Task LoadBadgesAsync(DataManagementService dataService, ApplicationUser? appUser)
+    {
+        var hrefs = groups.SelectMany(g => g.Items).Select(i => i.Href.Trim('/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var isAdmin = currentUserRoles.Contains("admin");
+
+        try
+        {
+            if (hrefs.Contains("unloadable-log-report"))
+            {
+                badges["unloadable-log-report"] = new Badge(await dataService.GetUnloadableRecordsCountAsync(isAdmin, appUser?.ReceivedTransUserID), true);
+            }
+            if (isAdmin && hrefs.Contains("reference-data-conflicts"))
+            {
+                badges["reference-data-conflicts"] = new Badge(await dataService.GetPendingReferenceDataConflictsCountAsync(), true);
+            }
+            if (isAdmin && hrefs.Contains("data-logging-access-requests"))
+            {
+                badges["data-logging-access-requests"] = new Badge(await dataService.GetPendingAccessRequestsCountAsync(), false);
+            }
+        }
+        catch
+        {
+            badges.Clear();
+        }
+    }
+
+    Badge? BadgeFor(NavItem item) => badges.TryGetValue(item.Href.Trim('/'), out var b) ? b : null;
+
+    bool IsClosed(int id) => closedGroups.Contains(id.ToString());
+
+    // "" (the dashboard) must match exactly; every other page also matches its sub-pages.
+    bool IsActive(NavItem item)
+    {
+        var href = item.Href.Trim('/');
+        return href.Length == 0
+            ? currentPath.Length == 0
+            : currentPath.Equals(href, StringComparison.OrdinalIgnoreCase) || currentPath.StartsWith(href + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     // No roles recorded on the item = visible to any authenticated user.
@@ -159,7 +227,4 @@
         var required = item.RequiredRoles.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         return required.Any(r => currentUserRoles.Contains(r));
     }
-
-    bool MatchesSearch(NavItem item) =>
-        string.IsNullOrWhiteSpace(searchText) || item.Label.Contains(searchText, StringComparison.OrdinalIgnoreCase);
 }

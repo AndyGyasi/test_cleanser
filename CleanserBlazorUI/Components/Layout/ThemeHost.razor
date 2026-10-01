@@ -1,0 +1,21 @@
+@implements IDisposable
+@inject ThemeService ThemeService
+@using CleanserBlazorUI.Theme
+@using CleanserBlazorUI.Services
+
+@* Interactive island that owns the MudThemeProvider, so switching theme
+   re-themes every Mud component live. MainLayout itself renders statically
+   and passes the theme it resolved from the request (query/cookie). *@
+<MudThemeProvider IsDarkMode="@ThemeService.IsDark" Theme="@CleanserTheme.Default" />
+
+@code {
+    [Parameter] public bool InitialDark { get; set; } = true;
+
+    protected override void OnInitialized() => ThemeService.Changed += OnChanged;
+
+    protected override void OnParametersSet() => ThemeService.SetFromCookieValue(InitialDark ? "dark" : "light");
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => ThemeService.Changed -= OnChanged;
+}

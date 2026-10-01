@@ -33,9 +33,12 @@ public class ThemeService
         else if (raw == "dark") IsDark = true;
     }
 
-    public async Task ToggleAsync(IJSRuntime js)
+    public Task ToggleAsync(IJSRuntime js) => SetAsync(!IsDark, js);
+
+    public async Task SetAsync(bool dark, IJSRuntime js)
     {
-        IsDark = !IsDark;
+        if (IsDark == dark) return;
+        IsDark = dark;
         Changed?.Invoke();
 
         try
@@ -44,7 +47,7 @@ public class ThemeService
         }
         catch
         {
-            // Not fatal -- the toggle still works for this circuit even if saving fails.
+            // Not fatal -- the switch still works for this circuit even if saving fails.
         }
     }
 }

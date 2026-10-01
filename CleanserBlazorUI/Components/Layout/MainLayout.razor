@@ -1,12 +1,12 @@
-﻿@inherits LayoutComponentBase
-@implements IDisposable
+@inherits LayoutComponentBase
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JS
 @inject ThemeService ThemeService
-@using CleanserBlazorUI.Theme
 @using CleanserBlazorUI.Services
 
-<MudThemeProvider IsDarkMode="@ThemeService.IsDark" Theme="@CleanserTheme.Default" />
+@* Theme provider is its own interactive island so the Light/Dark switch
+   re-themes every Mud component live; this layout renders statically and
+   hands it the theme resolved from the request (query/cookie). *@
+<ThemeHost @rendermode="InteractiveServer" InitialDark="@ThemeService.IsDark" />
 @* Explicit @rendermode here matters: MainLayout itself renders statically,
    so without pinning these to InteractiveServer, any page that opts into
    @rendermode InteractiveServer gets its own separate interactive circuit
@@ -17,59 +17,45 @@
 <MudDialogProvider @rendermode="InteractiveServer" />
 <MudSnackbarProvider @rendermode="InteractiveServer" />
 
-@* Unauthenticated routes (sign-in and friends) render full-bleed with no
-   sidebar/app-bar/footer -- those pages build their own chrome entirely,
-   since nothing in them belongs under the authenticated app shell.
-   isAuthenticated is resolved up front in OnInitializedAsync (not via
-   <AuthorizeView>, which defers its children behind an async render pass)
-   -- @Body must stay in the exact same tree position on every render no
-   matter what, or Blazor's [SupplyParameterFromForm] form-discovery for
+@* Signed-out routes (sign-in and friends) render full-bleed with no sidebar --
+   those pages draw their own chrome. isAuthenticated is resolved up front in
+   OnInitializedAsync (not via <AuthorizeView>, which defers its children
+   behind an async render pass), and @Body appears exactly once in the tree
+   whatever the state, or Blazor's [SupplyParameterFromForm] form discovery for
    pages like Login breaks with "EditForm requires a Model or EditContext". *@
-<MudLayout>
+<div class="cx-shell @(isAuthenticated ? "" : "cx-bare")" id="cx-shell">
     @if (isAuthenticated)
     {
-        @* No top app bar -- the sidebar (logo + nav + user/logout) is the only
-           chrome, matching the reference design. This small bar only exists to
-           hold the drawer toggle on mobile/narrow screens where the sidebar is
-           collapsed by default; it's hidden at desktop widths. *@
-        <MudAppBar Fixed="true" Dense="true" Elevation="0" Class="d-flex d-md-none">
-            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@(() => drawerOpen = !drawerOpen)" />
-            <MudImage Src="logocolor.png" Height="32" />
-        </MudAppBar>
-
-        <MudDrawer @bind-Open="drawerOpen" Elevation="1" Variant="@DrawerVariant.Responsive" Breakpoint="Breakpoint.Md" Width="280px">
-            <NavMenu />
-        </MudDrawer>
+        <NavMenu />
+        <div class="cx-scrim" data-cx="close-nav"></div>
     }
 
-    <MudMainContent Class="d-flex flex-column" Style="min-height: 100vh;">
+    <div class="cx-main">
         @if (isAuthenticated)
         {
-            <div class="d-flex justify-end pa-2 d-none d-md-flex">
-                <MudTooltip Text="@(ThemeService.IsDark ? "Switch to light theme" : "Switch to dark theme")">
-                    <MudIconButton Icon="@(ThemeService.IsDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                                   Color="Color.Default" Size="Size.Small" OnClick="@(() => ThemeService.ToggleAsync(JS))" />
-                </MudTooltip>
-            </div>
-            <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="flex-grow-1 pb-4">
-                @Body
-            </MudContainer>
-            <MudDivider />
-            <div class="d-flex justify-center pa-4">
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    Cleanser © @DateTime.Now.Year.ToString() <strong>XDS Data</strong>. All rights reserved.
-                    <MudLink Href="/privacy-policy" Class="mx-1">Privacy Policy</MudLink> |
-                    <MudLink Href="/terms-of-service" Class="mx-1">Terms of Service</MudLink> |
-                    <MudLink Href="/cookie-policy" Class="mx-1">Cookie Policy</MudLink>
-                </MudText>
+            <div class="cx-topbar">
+                <button type="button" class="cx-icon-btn" data-cx="open-nav" aria-label="Open menu">
+                    <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+                </button>
+                <img src="logocolor.png" alt="XDS Data Ghana" class="cx-topbar-logo" />
             </div>
         }
-        else
-        {
+
+        <main class="@(isAuthenticated ? "cx-page" : "")">
             @Body
+        </main>
+
+        @if (isAuthenticated)
+        {
+            <footer class="cx-legal">
+                <span>Cleanser © @DateTime.Now.Year.ToString() <strong>XDS Data Ghana</strong>. All rights reserved.</span>
+                <a href="privacy-policy">Privacy policy</a>
+                <a href="terms-of-service">Terms of service</a>
+                <a href="cookie-policy">Cookie policy</a>
+            </footer>
         }
-    </MudMainContent>
-</MudLayout>
+    </div>
+</div>
 
 <div id="blazor-error-ui">
     <a class="dismiss">🗙</a>
@@ -82,21 +68,14 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
 
-    bool drawerOpen = true;
     bool isAuthenticated;
-
-    private string? currentUrl;
 
     protected override async Task OnInitializedAsync()
     {
-        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-        NavigationManager.LocationChanged += OnLocationChanged;
-        ThemeService.Changed += StateHasChanged;
-
         // HttpContext is only populated during the initial static render pass
         // (the same pass every page gets before its circuit connects, whether
-        // or not the page itself ends up interactive) -- reading the cookie
-        // here means the correct theme applies on first paint everywhere,
+        // or not the page itself ends up interactive) -- reading the request's
+        // theme here means the correct theme applies on first paint everywhere,
         // including static-only pages like Login that never get a circuit.
         ThemeService.SetFromCookieValue(ThemeService.FromRequest(HttpContext));
 
@@ -105,17 +84,5 @@
             var authState = await AuthenticationStateTask;
             isAuthenticated = authState.User.Identity?.IsAuthenticated == true;
         }
-    }
-
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
-    {
-        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
-        StateHasChanged();
-    }
-
-    public void Dispose()
-    {
-        NavigationManager.LocationChanged -= OnLocationChanged;
-        ThemeService.Changed -= StateHasChanged;
     }
 }

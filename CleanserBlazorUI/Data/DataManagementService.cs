@@ -1369,6 +1369,13 @@ public class DataManagementService
         return headers.Where(h => assignedSet.Contains(h.Filename)).Sum(h => h.NumberOfRecords);
     }
 
+    // Lightweight counts for the sidebar badges (open items an admin needs to act on).
+    public Task<int> GetPendingReferenceDataConflictsCountAsync() =>
+        _context.ReferenceDataConflicts.CountAsync(c => c.ResolvedDate == null);
+
+    public Task<int> GetPendingAccessRequestsCountAsync() =>
+        _context.DataLoggingAccessRequests.CountAsync(r => r.Status == DataLoggingAccessRequestStatus.Pending);
+
     // ── Dynamic sidebar navigation ──────────────────────────────────────────
     public async Task<List<NavSection>> GetNavSectionsAsync()
     {
