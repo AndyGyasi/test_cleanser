@@ -3,192 +3,112 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
 @using CleanserBlazorUI.Data
-@using CleanserBlazorUI.Services
 @inject SignInManager<ApplicationUser> SignInManager
 @inject ILogger<Login> Logger
-@inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<div style="min-height: 100vh; display: flex; background: var(--mud-palette-background);">
-    <!-- Left column: brand / pitch -->
-    <div class="d-none d-md-flex flex-column justify-space-between pa-12" style="flex: 1; max-width: 560px;">
-        <MudImage Src="logocolor.png" Height="40" />
+<PageTitle>Sign in · Cleanser</PageTitle>
+
+@* Native InputText, not MudTextField: this page is static-rendered, and Mud
+   inputs emit no name attribute, so the browser would post no Input.* fields,
+   [SupplyParameterFromForm] would null Input, and EditForm would throw
+   "requires a Model or EditContext". Native inputs emit name="Input.Email" etc. *@
+<AuthShell Title="Sign in">
+    <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login" class="cx-auth-form">
+        <DataAnnotationsValidator />
 
         <div>
-            <div class="d-inline-flex align-center pa-1 px-3 mb-6" style="gap: 6px; border-radius: 20px; background: var(--mud-palette-success-hover); border: 1px solid var(--mud-palette-success);">
-                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Success" Style="font-size: 8px;" />
-                <MudText Typo="Typo.caption" Color="Color.Success"><b>Cleanser</b></MudText>
-            </div>
-
-            <MudText Typo="Typo.h3" Class="mb-4"><b>Clean credit data with confidence.</b></MudText>
-            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-8">
-                Upload files and catch errors before they reach the bureau database.
-            </MudText>
-
-            <MudPaper Outlined="true" Class="pa-6" Style="border-radius: 12px;">
-                <div class="d-flex justify-space-between align-center mb-4">
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="letter-spacing: 1px;"><b>SUPPORTED DATA TYPES</b></MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">7</MudText>
-                </div>
-                <div class="d-flex mb-4" style="gap: 8px; flex-wrap: wrap;">
-                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">IND</MudChip>
-                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small">BUS</MudChip>
-                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small">DUD</MudChip>
-                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small">JUD</MudChip>
-                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small">MOBILE</MudChip>
-                </div>
-                @foreach (var line in new[]
-                {
-                    "Duplicate and DOB checks on every file",
-                    "Matching against the reference register",
-                    "An unloadable log you can filter and export"
-                })
-                {
-                    <div class="d-flex align-center mb-1" style="gap: 8px;">
-                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" />
-                        <MudText Typo="Typo.body2">@line</MudText>
-                    </div>
-                }
-            </MudPaper>
+            <h2>Sign in</h2>
+            <p class="cx-lead" style="margin-top:8px">Use your xdsdata email to login.</p>
         </div>
 
-        <MudText Typo="Typo.caption" Color="Color.Secondary">
-            © @DateTime.Now.Year.ToString() XDS Data Ghana. All rights reserved.
-        </MudText>
-    </div>
+        @if (Expired)
+        {
+            <div class="cx-alert info" role="status">You were signed out after a period of inactivity. Sign in again to continue.</div>
+        }
+        <StatusMessage Message="@errorMessage" />
 
-    <!-- Right column: sign-in form -->
-    <div class="d-flex flex-column" style="flex: 1; position: relative;">
-        <div class="d-flex justify-end pa-6">
-            <MudButton Href="@themeToggleHref"
-                       Variant="Variant.Outlined" Size="Size.Small" Color="Color.Default"
-                       StartIcon="@(isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                       Style="border-radius: 20px;">
-                @(isDark ? "Light mode" : "Dark mode")
-            </MudButton>
+        <div class="cx-field">
+            <label for="login-email">Email address</label>
+            <span class="cx-control">
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 7l9 6 9-6" /></svg>
+                <InputText id="login-email" @bind-Value="Input.Email" type="email" autocomplete="username" aria-required="true" placeholder="name@xdsdata.com" />
+            </span>
+            <ValidationMessage For="() => Input.Email" class="cx-error" />
         </div>
 
-        <div class="d-flex flex-grow-1 align-center justify-center pa-6">
-            <div style="width: 100%; max-width: 400px;">
-                <MudText Typo="Typo.h4" Class="mb-1"><b>Sign in</b></MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">Use your xdsdata email to login.</MudText>
-
-                <StatusMessage Message="@errorMessage" />
-
-                @* Native InputText/InputCheckbox, not MudTextField/MudCheckBox: this page
-                   is static-rendered, and Mud inputs emit no name attribute, so the browser
-                   posts no Input.* fields, [SupplyParameterFromForm] nulls Input, and
-                   EditForm throws "requires a Model or EditContext". Native inputs emit
-                   name="Input.Email" etc. Styled below to match MudBlazor. *@
-                <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
-                    <DataAnnotationsValidator />
-                    <ValidationSummary class="text-danger" role="alert" />
-
-                    <div class="login-field">
-                        <label for="login-email">Email address</label>
-                        <InputText id="login-email" @bind-Value="Input.Email" type="email" autocomplete="username" aria-required="true" placeholder="name@xdsdata.com" />
-                        <ValidationMessage For="() => Input.Email" class="text-danger" />
-                    </div>
-
-                    <div class="login-field">
-                        <div class="d-flex justify-space-between align-center">
-                            <label for="login-password">Password</label>
-                            <MudLink Href="Account/ForgotPassword" Typo="Typo.body2">Forgot password?</MudLink>
-                        </div>
-                        <InputText id="login-password" @bind-Value="Input.Password" type="password" autocomplete="current-password" aria-required="true" />
-                        <ValidationMessage For="() => Input.Password" class="text-danger" />
-                    </div>
-
-                    <label class="login-check">
-                        <InputCheckbox @bind-Value="Input.RememberMe" />
-                        <span>Keep me signed in on this device</span>
-                    </label>
-
-                    <button type="submit" class="login-submit">Sign in</button>
-                </EditForm>
-            </div>
+        <div class="cx-field">
+            <span class="cx-field-row">
+                <label for="login-password">Password</label>
+                <a href="Account/ForgotPassword" style="font-size:13px">Forgot password?</a>
+            </span>
+            <span class="cx-control">
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V8a4 4 0 018 0v3" /></svg>
+                <InputText id="login-password" @bind-Value="Input.Password" type="password" autocomplete="current-password" aria-required="true" />
+                <button type="button" class="cx-icon-btn cx-eye" data-cx="show-pw" data-target="login-password" aria-label="Show password">
+                    <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z" /></svg>
+                </button>
+            </span>
+            <ValidationMessage For="() => Input.Password" class="cx-error" />
         </div>
-    </div>
-</div>
+
+        <button type="submit" class="cx-btn cx-btn-primary cx-btn-block">
+            Sign in
+            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+        </button>
+
+        <p class="cx-auth-note">
+            Haven't signed in for a while, or can't remember your password?
+            <a href="Account/ForgotPassword">Reset it here</a>.
+        </p>
+    </EditForm>
+</AuthShell>
 
 @code {
     private string? errorMessage;
-    private bool isDark;
-    private string themeToggleHref = "";
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get => _input ??= new(); set => _input = value; }
+    private InputModel? _input;
 
-    [SupplyParameterFromQuery]
-    private string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery(Name = "expired")]
+    private string? ExpiredFlag { get; set; }
+
+    private bool Expired => ExpiredFlag == "1";
 
     protected override async Task OnInitializedAsync()
     {
-        // A POST with no Input.* fields binds this to null; EditForm would then throw.
-        Input ??= new();
-
         if (HttpMethods.IsGet(HttpContext.Request.Method))
         {
             // Clear the existing external cookie to ensure a clean login process
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
         }
-
-        // This page is static-rendered (cookie auth sign-in needs a real HTTP
-        // response, not an interactive circuit), so the theme toggle can't use
-        // JS interop like the rest of the app -- it's a plain link that flips
-        // a query param, read here and persisted back to the shared cookie.
-        var requestedTheme = HttpContext.Request.Query["theme"].FirstOrDefault();
-        if (requestedTheme is "light" or "dark")
-        {
-            HttpContext.Response.Cookies.Append(ThemeService.CookieName, requestedTheme, new CookieOptions
-            {
-                Expires = DateTimeOffset.UtcNow.AddYears(1),
-                IsEssential = true,
-                SameSite = SameSiteMode.Lax
-            });
-            isDark = requestedTheme == "dark";
-        }
-        else
-        {
-            isDark = HttpContext.Request.Cookies[ThemeService.CookieName] != "light";
-        }
-
-        themeToggleHref = NavigationManager.GetUriWithQueryParameter("theme", isDark ? "light" : "dark");
     }
 
     public async Task LoginUser()
     {
-        // This doesn't count login failures towards account lockout
-        // To enable password failures to trigger account lockout, set lockoutOnFailure: true
-        var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
+        // Sessions are never persistent: closing the browser or sitting idle
+        // past the admin-set limit ends them. This doesn't count login failures
+        // towards account lockout; to enable that, set lockoutOnFailure: true.
+        var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, isPersistent: false, lockoutOnFailure: false);
         if (result.Succeeded)
         {
             Logger.LogInformation("User '{Email}' logged in successfully.", Input.Email);
 
+            // Newly created accounts must pick their own password first; everyone
+            // else lands on the data cleaning dashboard. (Where the user was
+            // heading before sign-in is deliberately not remembered.)
             var user = await SignInManager.UserManager.FindByEmailAsync(Input.Email);
-            // New accounts carry the "MustChangePassword" role (see Register /
-            // ChangePassword) -- only those go to Change Password first. Everyone
-            // else lands on the data cleaning dashboard (Home, "/") unless they
-            // were bounced here from another page (ReturnUrl).
-            var mustChange = user != null && await SignInManager.UserManager.IsInRoleAsync(user, "MustChangePassword");
-            if (mustChange)
-            {
-                RedirectManager.RedirectTo("Account/Manage/ChangePassword");
-            }
-            else
-            {
-                RedirectManager.RedirectTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl);
-            }
+            var mustChange = user != null && await SignInManager.UserManager.IsInRoleAsync(user, PasswordChangeMiddleware.RoleName);
+            RedirectManager.RedirectTo(mustChange ? "Account/ChangeTemporaryPassword" : "");
         }
         else if (result.RequiresTwoFactor)
         {
             Logger.LogWarning("User '{Email}' requires two-factor authentication.", Input.Email);
-            RedirectManager.RedirectTo(
-                "Account/LoginWith2fa",
-                new() { ["returnUrl"] = ReturnUrl, ["rememberMe"] = Input.RememberMe });
+            RedirectManager.RedirectTo("Account/LoginWith2fa", new() { ["rememberMe"] = false });
         }
         else if (result.IsLockedOut)
         {
@@ -204,15 +124,12 @@
 
     private sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
+        [Required(ErrorMessage = "Enter your email address.")]
+        [EmailAddress(ErrorMessage = "Enter a valid email address.")]
         public string Email { get; set; } = "";
 
-        [Required]
+        [Required(ErrorMessage = "Enter your password.")]
         [DataType(DataType.Password)]
         public string Password { get; set; } = "";
-
-        [Display(Name = "Remember me?")]
-        public bool RememberMe { get; set; }
     }
 }

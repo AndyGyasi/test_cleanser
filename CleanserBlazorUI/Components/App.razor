@@ -1,9 +1,14 @@
-﻿<!DOCTYPE html>
+﻿@inject CleanserBlazorUI.Services.SessionSettingsService SessionSettings
+<!DOCTYPE html>
 <html lang="en" data-theme="@Theme">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @if (isSignedIn)
+    {
+        <meta name="cx-idle-minutes" content="@idleMinutes" />
+    }
     <base href="/" />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
@@ -25,6 +30,8 @@
     <script src="_downloadFile.js"></script>
     <script src="_theme.js"></script>
     <script src="_shell.js"></script>
+    <script src="_auth.js"></script>
+    <script src="_session.js"></script>
 </body>
 
 </html>
@@ -36,4 +43,14 @@
     // Same resolution as MainLayout, so first paint already has the right
     // theme (dark unless the visitor explicitly chose light).
     private string Theme => CleanserBlazorUI.Services.ThemeService.FromRequest(HttpContext) == "light" ? "light" : "dark";
+
+    // Only signed-in pages get the idle-timeout script's setting (_session.js).
+    private bool isSignedIn;
+    private int idleMinutes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isSignedIn = HttpContext?.User.Identity?.IsAuthenticated == true;
+        if (isSignedIn) idleMinutes = await SessionSettings.GetIdleMinutesAsync();
+    }
 }

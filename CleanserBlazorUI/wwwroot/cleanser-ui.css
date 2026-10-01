@@ -83,7 +83,8 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 body { font-size: 14px; line-height: 1.45; margin: 0; }
-a { color: var(--link); }
+/* "html a" so it outranks MudBlazor's own bare "a" rule, which loads after this file */
+html a { color: var(--link); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cx-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
 .cx-muted { color: var(--muted); }
@@ -162,3 +163,82 @@ html[data-theme="dark"] .cx-segmented button[aria-pressed="true"] { background: 
   .cx-page { padding: 20px 16px 24px; }
   .cx-legal { padding: 14px 16px 20px; }
 }
+
+/* ---------- Page structure, cards, fields, buttons ---------- */
+.cx-page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.cx-crumb { font-size: 13px; color: var(--sub); }
+.cx-page-head h1 { margin: 6px 0 0; font-size: 28px; font-weight: 600; letter-spacing: -0.4px; }
+.cx-page-head p { margin: 6px 0 0; color: var(--sub); max-width: 70ch; }
+.cx-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.cx-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cx-card h2 { margin: 0; font-size: 15px; font-weight: 500; }
+.cx-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; }
+@media (max-width: 480px) { .cx-grid-2 { grid-template-columns: 1fr; } }
+.cx-field { display: flex; flex-direction: column; gap: 7px; font-size: 13px; color: var(--sub); }
+.cx-field label, label.cx-field { font-size: 13px; color: var(--sub); }
+.cx-field-row { display: flex; justify-content: space-between; align-items: center; }
+.cx-field .cx-control svg { color: var(--muted); }
+.cx-field .validation-message, .cx-error { color: var(--danger); font-size: 12px; }
+.cx-field input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px var(--input) inset; -webkit-text-fill-color: var(--text); }
+.cx-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid transparent; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.cx-btn-primary { background: var(--primary); color: #FFFFFF; }
+.cx-btn-primary:hover { background: var(--primary-hover); }
+.cx-btn-primary:disabled { background: var(--track); color: var(--sub); cursor: not-allowed; }
+.cx-btn-ghost { background: transparent; border-color: var(--input-border); color: var(--text); font-weight: 500; }
+.cx-btn-ghost:hover { background: var(--card-2); }
+.cx-btn-block { width: 100%; min-height: 50px; font-size: 15px; }
+.cx-alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; font-size: 13px; border: 1px solid var(--border); background: var(--card); }
+.cx-alert.error { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); }
+.cx-alert.ok { background: var(--active); border-color: var(--pill-border); color: var(--pill-text); }
+.cx-alert.info { background: var(--info-bg); border-color: transparent; color: var(--info); }
+.cx-eye { margin-right: -8px; }
+
+/* ---------- Sign-in / set-password pages ---------- */
+.cx-auth { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: var(--bg); }
+.cx-auth-brand { background: var(--side); border-right: 1px solid var(--border); padding: 48px 56px; display: flex; flex-direction: column; justify-content: space-between; gap: 40px; }
+.cx-auth-brand .cx-auth-logo img { height: 72px; width: auto; display: block; margin: -12px 0 0 -10px; }
+.cx-auth-brand h1 { margin: 0; font-size: clamp(32px, 3.4vw, 46px); line-height: 1.12; font-weight: 600; letter-spacing: -1px; }
+.cx-auth-brand p { margin: 0; font-size: 17px; line-height: 1.6; color: var(--sub); max-width: 46ch; }
+.cx-auth-brand .cx-stack { display: flex; flex-direction: column; gap: 28px; max-width: 520px; }
+.cx-feature-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.cx-feature-card ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.cx-feature-card li { display: flex; align-items: center; gap: 10px; }
+.cx-feature-card li svg { color: var(--brand); }
+.cx-step-label { font-size: 12px; letter-spacing: 1px; color: var(--muted); }
+.cx-code-chip { font-family: "IBM Plex Mono", monospace; font-size: 12px; padding: 5px 10px; border-radius: 6px; background: var(--chip); color: var(--chip-text); }
+.cx-code-chip.first { background: var(--accent); color: var(--accent-ink); }
+.cx-auth-main { display: flex; flex-direction: column; padding: 28px 24px 40px; gap: 28px; }
+.cx-auth-top { display: flex; justify-content: flex-end; align-items: center; }
+.cx-auth-logo-sm { display: none; margin-right: auto; }
+.cx-auth-logo-sm img { height: 52px; width: auto; display: block; margin: -8px 0 -8px -6px; }
+.cx-theme-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid var(--input-border); background: var(--card); color: var(--text); text-decoration: none; font-size: 13px; }
+.cx-auth-center { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+.cx-auth-col { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 22px; }
+.cx-auth-form { width: 100%; display: flex; flex-direction: column; gap: 22px; }
+.cx-linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--link); text-decoration: underline; cursor: pointer; }
+.cx-signout { display: block; }
+.cx-control input.valid, .cx-control input.invalid, .cx-control input.modified { outline: 0; }
+.cx-control:has(input.invalid) { border-color: var(--danger-border); }
+.cx-auth-form h2 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.4px; }
+.cx-auth-form .cx-lead { margin: 0; color: var(--sub); font-size: 15px; line-height: 1.55; }
+.cx-auth-note { margin: 0; text-align: center; font-size: 13px; color: var(--sub); }
+.cx-auth-legal { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; font-size: 12px; }
+.cx-auth-legal a { color: var(--muted); }
+.cx-auth-copy { font-size: 12px; color: var(--muted); }
+.cx-user-chip { display: inline-flex; align-self: flex-start; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 20px; background: var(--card); border: 1px solid var(--border); font-size: 13px; }
+.cx-avatar.sm { width: 26px; height: 26px; font-size: 11px; }
+@media (max-width: 900px) { .cx-auth { grid-template-columns: 1fr; } .cx-auth-brand { display: none; } .cx-auth-logo-sm { display: inline-flex; } }
+
+/* password strength + rules (driven by _auth.js) */
+.cx-meter { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 6px; align-items: center; }
+.cx-meter i { display: block; height: 5px; border-radius: 3px; background: var(--track); }
+.cx-meter i.on-1, .cx-meter i.on-2 { background: #E56B4E; }
+.cx-meter i.on-3 { background: #E9A23B; }
+.cx-meter i.on-4 { background: var(--accent); }
+.cx-meter span { font-size: 12px; min-width: 56px; text-align: right; color: var(--warn); }
+.cx-meter span.ok { color: var(--brand); }
+.cx-rules { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; list-style: none; margin: 0; }
+.cx-rules li { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--sub); }
+.cx-rules li::before { content: ""; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--input-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+.cx-rules li.ok { color: var(--text); }
+.cx-rules li.ok::before { content: "\2713"; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }

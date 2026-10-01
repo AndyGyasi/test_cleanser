@@ -82,7 +82,10 @@
         if (AuthenticationStateTask != null)
         {
             var authState = await AuthenticationStateTask;
-            isAuthenticated = authState.User.Identity?.IsAuthenticated == true;
+            // A brand-new account is signed in but may only see the set-password
+            // page (PasswordChangeMiddleware), so it gets no sidebar or app chrome.
+            isAuthenticated = authState.User.Identity?.IsAuthenticated == true
+                              && !authState.User.IsInRole(PasswordChangeMiddleware.RoleName);
         }
     }
 }

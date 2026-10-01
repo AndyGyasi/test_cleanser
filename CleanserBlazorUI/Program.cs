@@ -79,6 +79,42 @@ builder.Services.AddAuthentication(options =>
     })
     .AddIdentityCookies();
 
+builder.Services.AddSingleton<SessionSettingsService>();
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    // The real session limit is the admin-set idle timeout (SessionIdle); the
+    // cookie's own lifetime is just a long backstop above the maximum setting.
+    options.ExpireTimeSpan = TimeSpan.FromHours(9);
+    options.SlidingExpiration = true;
+
+    var identityValidate = options.Events.OnValidatePrincipal;
+    options.Events.OnValidatePrincipal = async context =>
+    {
+        await SessionIdle.ValidateAsync(context);
+        if (context.Principal is null) return;
+        if (identityValidate is not null) await identityValidate(context);
+    };
+
+    var identitySigningIn = options.Events.OnSigningIn;
+    options.Events.OnSigningIn = context =>
+    {
+        SessionIdle.StampSignIn(context);
+        return identitySigningIn(context);
+    };
+
+    // The keep-alive ping is called by script: answer 401 instead of redirecting to the login page.
+    var redirectToLogin = options.Events.OnRedirectToLogin;
+    options.Events.OnRedirectToLogin = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/session/keepalive"))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        }
+        return redirectToLogin(context);
+    };
+});
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -137,6 +173,7 @@ builder.Services.Configure<IdentityOptions>(options =>
     options.SignIn.RequireConfirmedAccount = false;
     options.SignIn.RequireConfirmedEmail = false;
     options.SignIn.RequireConfirmedPhoneNumber = false;
+    options.Password.RequiredLength = 8;
 });
 
 // Add to your services
@@ -190,13 +227,50 @@ else
 app.UseHttpsRedirection();
 
 app.MapStaticAssets();
+// Authentication, then the new-account lock, then authorization -- in that order, so a
+// brand-new account is sent to "set your password" before any page's role check can
+// answer "access denied". (Spelled out because the implicit calls would put the lock
+// after authorization.)
+app.UseAuthentication();
+app.UseMiddleware<PasswordChangeMiddleware>();
+app.UseAuthorization();
 app.UseAntiforgery();
+
+// ?theme=light|dark (the sign-in page's toggle link) is remembered as the theme cookie.
+app.Use(async (context, next) =>
+{
+    var theme = context.Request.Query["theme"].FirstOrDefault();
+    if (theme is "light" or "dark")
+    {
+        context.Response.Cookies.Append(ThemeService.CookieName, theme, new CookieOptions
+        {
+            Expires = DateTimeOffset.UtcNow.AddYears(1),
+            IsEssential = true,
+            SameSite = SameSiteMode.Lax
+        });
+    }
+    await next();
+});
+
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 
 app.MapAdditionalIdentityEndpoints();
+
+// Called by _session.js while the user is active; the request itself is what
+// refreshes the idle timer (see SessionIdle). 401 = the session has ended.
+app.MapPost("/session/keepalive", (HttpContext context) =>
+        context.User.Identity?.IsAuthenticated == true ? Results.NoContent() : Results.StatusCode(StatusCodes.Status401Unauthorized))
+    .DisableAntiforgery();
+
+// _session.js sends an idle page here: end the session, then show the sign-in page.
+app.MapGet("/session/timeout", async (SignInManager<ApplicationUser> signInManager) =>
+{
+    await signInManager.SignOutAsync();
+    return Results.LocalRedirect("~/Account/Login?expired=1");
+});
 
 // Plain-HTTP upload used by the file dropzones instead of routing bytes
 // through browserFile.OpenReadStream() over the SignalR circuit -- that path

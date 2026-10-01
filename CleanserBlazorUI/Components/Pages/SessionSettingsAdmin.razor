@@ -1,0 +1,90 @@
+@page "/session-settings"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authorization
+@using CleanserBlazorUI.Components.Account
+@using CleanserBlazorUI.Components.Account.Shared
+@using CleanserBlazorUI.Services
+@attribute [Authorize(Roles = "admin")]
+@inject SessionSettingsService Settings
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Session settings · Cleanser</PageTitle>
+
+<header class="cx-page-head">
+    <div>
+        <div class="cx-crumb">Admin</div>
+        <h1>Session settings</h1>
+        <p>How long a signed-in session may sit idle before the user has to sign in again. This protects confidential credit data on screens that are left unattended.</p>
+    </div>
+</header>
+
+<StatusMessage />
+
+<EditForm Model="Input" method="post" FormName="session-settings" OnValidSubmit="SaveAsync" class="cx-card" style="max-width:560px">
+    <DataAnnotationsValidator />
+    <h2>Idle timeout</h2>
+
+    <div class="cx-field">
+        <label for="idle-minutes">Sign users out after (minutes of inactivity)</label>
+        <span class="cx-control">
+            <InputNumber id="idle-minutes" @bind-Value="Input.Minutes" min="@SessionSettingsService.MinMinutes" max="@SessionSettingsService.MaxMinutes" />
+        </span>
+        <ValidationMessage For="() => Input.Minutes" class="cx-error" />
+        <span class="cx-hint">Between @SessionSettingsService.MinMinutes minutes and @SessionSettingsService.MaxMinutes minutes (8 hours). The default is @SessionSettingsService.DefaultMinutes.</span>
+    </div>
+
+    <div class="cx-alert info" role="note">
+        Applies to every user straight away, including sessions that are already open. Working in the app counts as activity,
+        so someone actively using it is not signed out.
+    </div>
+
+    @if (current?.UpdatedUtc is not null)
+    {
+        <span class="cx-hint">Last changed by @current.UpdatedBy on @current.UpdatedUtc.Value.ToLocalTime().ToString("d MMM yyyy, HH:mm").</span>
+    }
+
+    <div class="cx-actions">
+        <button type="submit" class="cx-btn cx-btn-primary">Save</button>
+    </div>
+</EditForm>
+
+@code {
+    private Entities.SessionSettings? current;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get => _input ??= new(); set => _input = value; }
+    private InputModel? _input;
+
+    protected override async Task OnInitializedAsync()
+    {
+        current = await Settings.GetRowAsync();
+
+        // A fresh GET shows the current value; a POST keeps whatever was typed.
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            Input.Minutes = current?.IdleTimeoutMinutes ?? SessionSettingsService.DefaultMinutes;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var error = await Settings.SaveAsync(Input.Minutes, HttpContext.User.Identity?.Name ?? "unknown");
+        if (error is not null)
+        {
+            RedirectManager.RedirectToCurrentPageWithStatus($"Error: {error}", HttpContext);
+            return;
+        }
+
+        RedirectManager.RedirectToCurrentPageWithStatus($"Saved. Users are now signed out after {Input.Minutes} minutes of inactivity.", HttpContext);
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Enter a number of minutes.")]
+        [Range(SessionSettingsService.MinMinutes, SessionSettingsService.MaxMinutes, ErrorMessage = "Enter a value between 5 and 480 minutes.")]
+        public int Minutes { get; set; } = SessionSettingsService.DefaultMinutes;
+    }
+}

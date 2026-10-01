@@ -99,6 +99,7 @@
         ["Folder"] = Icons.Material.Outlined.Folder,
         ["Link"] = Icons.Material.Outlined.Link,
         ["Tune"] = Icons.Material.Outlined.Tune,
+        ["Timer"] = Icons.Material.Outlined.Timer,
     };
 
     static string ResolveIcon(string? key) =>
@@ -170,7 +171,8 @@
         {
             groups.Add(new NavGroup(-1, "Admin", new List<NavItem>
             {
-                new() { Label = "Manage sidebar", Href = "navigation-settings", IconKey = "Tune" }
+                new() { Label = "Manage sidebar", Href = "navigation-settings", IconKey = "Tune" },
+                new() { Label = "Session settings", Href = "session-settings", IconKey = "Timer" }
             }));
         }
 

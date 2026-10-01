@@ -1,7 +1,7 @@
-﻿@if (!string.IsNullOrEmpty(DisplayMessage))
+@if (!string.IsNullOrEmpty(DisplayMessage))
 {
-    var severity = DisplayMessage.StartsWith("Error") ? MudBlazor.Severity.Error : MudBlazor.Severity.Success;
-    <MudAlert Severity="@severity" Class="mb-4">@DisplayMessage</MudAlert>
+    var isError = DisplayMessage.StartsWith("Error");
+    <div class="cx-alert @(isError ? "error" : "ok")" role="@(isError ? "alert" : "status")">@DisplayMessage</div>
 }
 
 @code {

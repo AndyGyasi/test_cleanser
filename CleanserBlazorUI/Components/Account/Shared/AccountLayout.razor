@@ -1,4 +1,4 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @layout CleanserBlazorUI.Components.Layout.MainLayout
 @inject NavigationManager NavigationManager
 
@@ -8,9 +8,7 @@
 }
 else
 {
-    <div style="min-height: 100vh; overflow: hidden; background: var(--mud-palette-background); width: 100%;">
     @Body
-    </div>
 }
 
 @code {

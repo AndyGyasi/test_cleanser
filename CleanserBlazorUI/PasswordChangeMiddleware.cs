@@ -1,38 +1,38 @@
-﻿using Microsoft.AspNetCore.Identity;
-using CleanserBlazorUI.Data;
-
-public class PasswordChangeMiddleware
+/// <summary>
+/// Every newly created account carries the "MustChangePassword" role until its
+/// owner picks their own password. Until then the only things they can reach are
+/// the set-password page, log out, and the static/framework files those pages
+/// need -- every other request is sent to the set-password page, so the
+/// requirement can't be skipped by typing another address.
+///
+/// The role is read from the sign-in cookie's claims (no database hit per
+/// request); ChangeTemporaryPassword refreshes the cookie when the role is lifted.
+/// </summary>
+public class PasswordChangeMiddleware(RequestDelegate next)
 {
-    private readonly RequestDelegate _next;
-    private readonly UserManager<ApplicationUser> _userManager;
+    public const string RoleName = "MustChangePassword";
+    public const string SetPasswordPath = "/Account/ChangeTemporaryPassword";
 
-    public PasswordChangeMiddleware(RequestDelegate next, UserManager<ApplicationUser> userManager)
+    private static readonly string[] AllowedPrefixes =
     {
-        _next = next;
-        _userManager = userManager;
-    }
+        SetPasswordPath, "/Account/Logout", "/session/", "/_framework", "/_blazor", "/_content", "/api/uploads"
+    };
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (context.User.Identity?.IsAuthenticated == true)
+        if (context.User.Identity?.IsAuthenticated == true && context.User.IsInRole(RoleName))
         {
-            // Retrieve the current user from the database
-            var userId = context.User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value; // Or use ClaimTypes.NameIdentifier
-            if (userId != null)
+            var path = context.Request.Path;
+            var allowed = Path.HasExtension(path.Value) // css/js/images/fonts
+                || AllowedPrefixes.Any(p => path.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase) || path.Value!.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
+            if (!allowed)
             {
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user?.MustChangePassword == true)
-                {
-                    var path = context.Request.Path.ToString();
-                    if (!path.Equals("/Account/ForgotPassword", StringComparison.OrdinalIgnoreCase))
-                    {
-                        context.Response.Redirect("/Account/ForgotPassword");
-                        return;
-                    }
-                }
+                context.Response.Redirect(SetPasswordPath);
+                return;
             }
         }
 
-        await _next(context);
+        await next(context);
     }
 }
