@@ -1,0 +1,134 @@
+@page "/unloadable-error-catalog"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+
+@attribute [Authorize(Roles = "admin")]
+
+<MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
+
+<MudText Typo="Typo.h5" Class="mb-4">Unloadable Error Catalog</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Generic, subscriber-agnostic list that decides which category an unloadable error message rolls up under
+    (see the Category/Sub-Category breakdown on the Unloadable Log). It is not tied to any Data Provider. Add a
+    row here whenever a new kind of error needs its own category, or a message isn't being sorted correctly.
+    For a message that contains a real value (an ID, a date, etc.), write the fixed wording around it and wrap
+    the variable part in curly braces, e.g. <code>NATIONAL ID LINKED TO DIFFERENT DATES OF BIRTH — SAME {ID field} CANNOT BELONG TO TWO DIFFERENT PEOPLE</code>.
+</MudText>
+
+<MudPaper Class="pa-4 mb-4" Outlined="true">
+    <MudText Typo="Typo.h6" Class="mb-2">Add New Entry</MudText>
+    <MudGrid>
+        <MudItem xs="12" sm="3">
+            <MudTextField @bind-Value="newTopLevelCategory" Label="Top Level Category" />
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudTextField @bind-Value="newSubCategory" Label="Sub Category" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="newDescriptionOfErrors" Label="Description Of Errors" />
+        </MudItem>
+        <MudItem xs="12" sm="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="AddEntryAsync">Add</MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudDataGrid T="UnloadableErrorCatalogEntry" Items="@entries" Loading="@isLoading" ReadOnly="false"
+             EditMode="DataGridEditMode.Form" EditTrigger="DataGridEditTrigger.Manual"
+             CommittedItemChanges="OnEntryCommitted"
+             Filterable="true" SortMode="SortMode.Multiple" Bordered="true" Striped="true" Dense="true">
+    <Columns>
+        <PropertyColumn Property="x => x.TopLevelCategory" Title="Top Level Category" />
+        <PropertyColumn Property="x => x.SubCategory" Title="Sub Category" />
+        <PropertyColumn Property="x => x.DescriptionOfErrors" Title="Description Of Errors" />
+        <PropertyColumn Property="x => x.LastUpdatedDate" Title="Last Updated" ReadOnly="true">
+            <CellTemplate>@context.Item.LastUpdatedDate.ToString("dd MMM yyyy HH:mm")</CellTemplate>
+        </PropertyColumn>
+        <TemplateColumn Title="" Sortable="false" Filterable="false">
+            <CellTemplate>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                           OnClick="@(() => context.Actions.StartEditingItemAsync())">Edit</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Class="ml-2"
+                           OnClick="@(() => DeleteEntryAsync(context.Item))">Delete</MudButton>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="UnloadableErrorCatalogEntry" PageSizeOptions="new[] { 25, 50, 100 }" />
+    </PagerContent>
+    <NoRecordsContent>
+        <MudText>No catalog entries yet.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;
+    string AlertSeverityVisible = "d-none";
+    string AlertSeverityMessage = string.Empty;
+    bool isLoading;
+
+    List<UnloadableErrorCatalogEntry> entries = new();
+
+    string newTopLevelCategory = string.Empty;
+    string newSubCategory = string.Empty;
+    string newDescriptionOfErrors = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntriesAsync();
+    }
+
+    async Task LoadEntriesAsync()
+    {
+        isLoading = true;
+        entries = await DataManagementService.GetUnloadableErrorCatalogAsync();
+        isLoading = false;
+    }
+
+    async Task AddEntryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newTopLevelCategory) || string.IsNullOrWhiteSpace(newSubCategory) || string.IsNullOrWhiteSpace(newDescriptionOfErrors))
+        {
+            AlertSeverity = MudBlazor.Severity.Warning;
+            AlertSeverityMessage = "Top Level Category, Sub Category and Description Of Errors are all required.";
+            AlertSeverityVisible = "d-block";
+            return;
+        }
+
+        await DataManagementService.AddUnloadableErrorCatalogEntryAsync(
+            newTopLevelCategory.Trim(), newSubCategory.Trim(), newDescriptionOfErrors.Trim());
+
+        newTopLevelCategory = string.Empty;
+        newSubCategory = string.Empty;
+        newDescriptionOfErrors = string.Empty;
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = "Entry added.";
+        AlertSeverityVisible = "d-block";
+
+        await LoadEntriesAsync();
+    }
+
+    async Task OnEntryCommitted(UnloadableErrorCatalogEntry row)
+    {
+        await DataManagementService.UpdateUnloadableErrorCatalogEntryAsync(
+            row.Id, row.TopLevelCategory ?? string.Empty, row.SubCategory ?? string.Empty, row.DescriptionOfErrors ?? string.Empty);
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = "Entry updated.";
+        AlertSeverityVisible = "d-block";
+
+        await LoadEntriesAsync();
+    }
+
+    async Task DeleteEntryAsync(UnloadableErrorCatalogEntry row)
+    {
+        await DataManagementService.DeleteUnloadableErrorCatalogEntryAsync(row.Id);
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = "Entry deleted.";
+        AlertSeverityVisible = "d-block";
+
+        await LoadEntriesAsync();
+    }
+}

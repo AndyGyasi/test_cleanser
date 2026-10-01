@@ -84,3 +84,51 @@ public class UnloadableLogCategoryDetail
     public int VolumeAffected { get; set; }
     public double Percentage { get; set; }
 }
+
+/// <summary>
+/// Generic, subscriber-agnostic reference table: given the fixed wording of
+/// an error message (placeholders like real IDs/dates stripped out), says
+/// which TopLevelCategory/SubCategory it belongs to. Drives
+/// UnloadableLogService.CategorizeMessage -- editable via the
+/// Unloadable Error Catalog page instead of requiring a code change
+/// whenever an existing check's message needs a new or different label.
+/// </summary>
+public class UnloadableErrorCatalogEntry
+{
+    public int Id { get; set; }
+    public string TopLevelCategory { get; set; } = string.Empty;
+    public string SubCategory { get; set; } = string.Empty;
+    public string DescriptionOfErrors { get; set; } = string.Empty;
+    public DateTime LastUpdatedDate { get; set; }
+}
+
+/// <summary>
+/// One enriched row per UnloadableLogHeader for the Unloadable Log Report page
+/// (see GetUnloadableLogReportDataAsync) -- the header's own fields plus its
+/// Data Provider identity resolved fresh from Subscriber.Subscribers (via the
+/// filename's short code), since UnloadableLogHeader only links to the local,
+/// legacy SubscriberProfile (no category). Not a mapped table -- a view model.
+/// </summary>
+public class UnloadableLogReportRow
+{
+    public int HeaderId { get; set; }
+    public string Filename { get; set; } = string.Empty;
+    public string DataProvider { get; set; } = string.Empty;
+    public string? SubCode { get; set; }
+    public string? SubXDSCode { get; set; }
+    public string? SubCategoryCode { get; set; }
+    public string? SubCategoryDescription { get; set; }
+    public string Associate { get; set; } = string.Empty;
+    public int NumberOfRecords { get; set; }
+    public string ReportingPeriod { get; set; } = string.Empty;
+    public string ReportingYear { get; set; } = string.Empty;
+    public string DataType { get; set; } = string.Empty;
+    public string Months { get; set; } = string.Empty;
+    public string LogYear { get; set; } = string.Empty;
+    public DateTime? DateEmailed { get; set; }
+    public DateTime? DateFixed { get; set; }
+    public string? Comments { get; set; }
+    public DateTime CreatedDate { get; set; }
+    public List<UnloadableLogMessageDetail> MessageDetails { get; set; } = new();
+    public List<UnloadableLogCategoryDetail> CategoryDetails { get; set; } = new();
+}

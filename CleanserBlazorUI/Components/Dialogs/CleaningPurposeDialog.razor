@@ -1,0 +1,33 @@
+@* Popup shown before Run Cleanser proceeds with any file the user is
+   cleared to clean (true owner, admin, or an approved access request).
+   Never shown for a blocked file -- those get skipped, not prompted. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-3">What is the purpose of this cleaning run?</MudText>
+        <MudSelect T="int?" @bind-Value="SelectedReasonId" Label="Purpose" Required="true">
+            @foreach (var reason in Reasons)
+            {
+                <MudSelectItem T="int?" Value="@reason.Id">@reason.Reason</MudSelectItem>
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(SelectedReasonId == null)">Continue</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public List<DataLoggingCleaningPurposeReason> Reasons { get; set; } = new();
+
+    int? SelectedReasonId;
+
+    void Submit()
+    {
+        var reasonText = Reasons.FirstOrDefault(r => r.Id == SelectedReasonId)?.Reason;
+        MudDialog.Close(DialogResult.Ok(reasonText));
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

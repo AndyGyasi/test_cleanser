@@ -1,85 +1,139 @@
-﻿@implements IDisposable
-
+@* The app's single chrome element -- logo, dynamic nav, and the user/logout
+   footer all live here, inside MainLayout's MudDrawer. Sections and items
+   are loaded from the database (NavSection/NavItem) rather than hardcoded,
+   so admin can rename sections and drag pages between them from
+   /navigation-settings without a code change. A section renders only if at
+   least one of its items is visible to the current user's role. *@
+@inject DataManagementService DataManagementService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager NavigationManager
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">CleanserBlazorUI</a>
+<div class="d-flex flex-column" style="height: 100%;">
+    <div class="pa-4">
+        <MudImage Src="logocolor.png" Height="40" />
     </div>
-    <AuthorizeView Roles="admin,registrar">
-        <Authorized>
-            <div class="container-fluid">
-                <a class="navbar-brand" href="refdata">refdata</a>
-            </div>
-        </Authorized>
-    </AuthorizeView>
-    <AuthorizeView Roles="admin">
-        <Authorized>
-            <div class="container-fluid">
-                <a class="navbar-brand" href="unloadable-log-history">unloadable log history</a>
-            </div>
-        </Authorized>
-    </AuthorizeView>
-</div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+    <MudNavMenu Class="flex-grow-1" style="overflow-y: auto;">
+        @foreach (var navSection in sections)
+        {
+            var visibleItems = navSection.Items.Where(IsVisible).OrderBy(i => i.DisplayOrder).ToList();
+            if (visibleItems.Count > 0)
+            {
+                <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-3">@navSection.Title</MudText>
+                @foreach (var item in visibleItems)
+                {
+                    <MudNavLink Href="@item.Href" Match="@(item.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" Icon="@ResolveIcon(item.IconKey)">
+                        @item.Label
+                        @if (item.Href == "unloadable-log-report" && unloadableCount > 0)
+                        {
+                            <MudBadge Content="@unloadableCount" Color="Color.Primary" Overlap="false" Class="ml-2" />
+                        }
+                    </MudNavLink>
+                }
+            }
+        }
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="flex-column">
-
-
-
-        <AuthorizeView>
+        <AuthorizeView Roles="admin">
             <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Manage">
-                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <form action="Account/Logout" method="post">
-                        <AntiforgeryToken />
-                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                        <button type="submit" class="nav-link">
-                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
-                        </button>
-                    </form>
-                </div>
+                <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-3">Admin</MudText>
+                <MudNavLink Href="navigation-settings" Icon="@Icons.Material.Filled.Tune">Manage Sidebar</MudNavLink>
             </Authorized>
-            <NotAuthorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Register">
-                        <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Register
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Login">
-                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Login
-                    </NavLink>
-                </div>
-            </NotAuthorized>
         </AuthorizeView>
-    </nav>
+    </MudNavMenu>
+
+    <MudDivider />
+
+    <AuthorizeView>
+        <Authorized>
+            <div class="pa-4 d-flex align-center">
+                <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-2">@Initial</MudAvatar>
+                <div class="flex-grow-1" style="min-width: 0;">
+                    <MudText Typo="Typo.body2" Class="text-truncate">@context.User.Identity?.Name</MudText>
+                    <div class="d-flex align-center" style="gap: 8px;">
+                        <MudLink Href="Account/Manage" Typo="Typo.caption">Profile</MudLink>
+                        <form action="Account/Logout" method="post">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                            <button type="submit" style="background:none;border:none;padding:0;cursor:pointer;" class="mud-typography-caption mud-primary-text">Log out</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <div class="pa-4">
+                <MudButton Href="Account/Login" Color="Color.Primary" Variant="Variant.Filled" FullWidth="true">Login</MudButton>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
 </div>
 
 @code {
-    private string? currentUrl;
+    // Keep in sync with NavigationSettings.razor's icon picker -- IconKey is
+    // stored as this short name (not a literal icon string) so it stays
+    // readable in the database and in the management UI.
+    public static readonly Dictionary<string, string> IconMap = new()
+    {
+        ["Person"] = Icons.Material.Filled.Person,
+        ["PersonAdd"] = Icons.Material.Filled.PersonAdd,
+        ["Group"] = Icons.Material.Filled.Group,
+        ["CleaningServices"] = Icons.Material.Filled.CleaningServices,
+        ["Business"] = Icons.Material.Filled.Business,
+        ["Rule"] = Icons.Material.Filled.Rule,
+        ["Schedule"] = Icons.Material.Filled.Schedule,
+        ["ReportProblem"] = Icons.Material.Filled.ReportProblem,
+        ["History"] = Icons.Material.Filled.History,
+        ["MenuBook"] = Icons.Material.Filled.MenuBook,
+        ["Badge"] = Icons.Material.Filled.Badge,
+        ["UploadFile"] = Icons.Material.Filled.UploadFile,
+        ["FactCheck"] = Icons.Material.Filled.FactCheck,
+        ["Message"] = Icons.Material.Filled.Message,
+        ["ErrorOutline"] = Icons.Material.Filled.ErrorOutline,
+        ["ListAlt"] = Icons.Material.Filled.ListAlt,
+        ["Settings"] = Icons.Material.Filled.Settings,
+        ["Folder"] = Icons.Material.Filled.Folder,
+        ["Link"] = Icons.Material.Filled.Link,
+    };
 
-    protected override void OnInitialized()
+    static string ResolveIcon(string? key) =>
+        !string.IsNullOrWhiteSpace(key) && IconMap.TryGetValue(key, out var icon) ? icon : Icons.Material.Filled.Circle;
+
+    List<NavSection> sections = new();
+    HashSet<string> currentUserRoles = new();
+    int unloadableCount;
+    string? currentUrl;
+    string Initial = "?";
+
+    protected override async Task OnInitializedAsync()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-        NavigationManager.LocationChanged += OnLocationChanged;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            var name = authState.User.Identity?.Name;
+            Initial = !string.IsNullOrWhiteSpace(name) ? name[..1].ToUpperInvariant() : "?";
+
+            var appUser = await UserManager.GetUserAsync(authState.User);
+            if (appUser != null)
+            {
+                currentUserRoles = new HashSet<string>(await UserManager.GetRolesAsync(appUser), StringComparer.OrdinalIgnoreCase);
+            }
+            var isAdmin = currentUserRoles.Contains("admin");
+            unloadableCount = await DataManagementService.GetUnloadableRecordsCountAsync(isAdmin, appUser?.ReceivedTransUserID);
+        }
+
+        sections = await DataManagementService.GetNavSectionsAsync();
     }
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    // No roles recorded on the item = visible to any authenticated user.
+    // Otherwise the user needs at least one of the comma-separated roles.
+    bool IsVisible(NavItem item)
     {
-        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
-        StateHasChanged();
-    }
+        if (string.IsNullOrWhiteSpace(item.RequiredRoles)) return true;
 
-    public void Dispose()
-    {
-        NavigationManager.LocationChanged -= OnLocationChanged;
+        var required = item.RequiredRoles.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return required.Any(r => currentUserRoles.Contains(r));
     }
 }
-

@@ -1,0 +1,106 @@
+@page "/data-logging-cleaning-purposes"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+
+@attribute [Authorize(Roles = "admin")]
+
+<MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
+
+<MudText Typo="Typo.h5" Class="mb-4">Cleaning Purpose Reasons</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Choices shown in the popup before Run Cleanser proceeds with a file the user is cleared to clean (true
+    owner, admin, or an approved access request) -- never shown for a blocked file.
+</MudText>
+
+<MudPaper Class="pa-4 mb-4" Outlined="true">
+    <MudGrid Class="mb-2">
+        <MudItem xs="12" sm="8">
+            <MudTextField @bind-Value="newReasonText" Label="New purpose" />
+        </MudItem>
+        <MudItem xs="12" sm="4" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="AddReasonAsync">Add</MudButton>
+        </MudItem>
+    </MudGrid>
+    <MudDataGrid T="DataLoggingCleaningPurposeReason" Items="@reasons" ReadOnly="false"
+                 EditMode="DataGridEditMode.Form" EditTrigger="DataGridEditTrigger.Manual"
+                 CommittedItemChanges="OnReasonCommitted"
+                 Bordered="true" Striped="true" Dense="true">
+        <Columns>
+            <PropertyColumn Property="x => x.Reason" Title="Purpose" />
+            <TemplateColumn Title="" Sortable="false" Filterable="false">
+                <CellTemplate>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                               OnClick="@(() => context.Actions.StartEditingItemAsync())">Edit</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Class="ml-2"
+                               OnClick="@(() => DeleteReasonAsync(context.Item))">Delete</MudButton>
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <NoRecordsContent><MudText>No purposes yet.</MudText></NoRecordsContent>
+    </MudDataGrid>
+</MudPaper>
+
+<MudText Typo="Typo.h6" Class="mb-2">Cleaning Log</MudText>
+<MudDataGrid T="DataLoggingCleaningPurposeLog" Items="@log" Loading="@isLoading"
+             Filterable="true" SortMode="SortMode.Multiple" Bordered="true" Striped="true" Dense="true">
+    <Columns>
+        <PropertyColumn Property="x => x.Filename" Title="Filename" />
+        <PropertyColumn Property="x => x.DataProvider" Title="Data Provider" />
+        <PropertyColumn Property="x => x.SubCode" Title="SubCode" />
+        <PropertyColumn Property="x => x.PerformedByEmail" Title="Performed By" />
+        <PropertyColumn Property="x => x.Purpose" Title="Purpose" />
+        <PropertyColumn Property="x => x.PerformedDate" Title="Performed">
+            <CellTemplate>@context.Item.PerformedDate.ToString("dd MMM yyyy HH:mm")</CellTemplate>
+        </PropertyColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="DataLoggingCleaningPurposeLog" PageSizeOptions="new[] { 25, 50, 100 }" />
+    </PagerContent>
+    <NoRecordsContent>
+        <MudText>No cleaning runs recorded yet.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;
+    string AlertSeverityVisible = "d-none";
+    string AlertSeverityMessage = string.Empty;
+    bool isLoading;
+
+    List<DataLoggingCleaningPurposeReason> reasons = new();
+    List<DataLoggingCleaningPurposeLog> log = new();
+    string newReasonText = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        reasons = await DataManagementService.GetCleaningPurposeReasonsAsync();
+        log = await DataManagementService.GetCleaningPurposeLogAsync();
+        isLoading = false;
+    }
+
+    async Task AddReasonAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newReasonText)) return;
+
+        await DataManagementService.AddCleaningPurposeReasonAsync(newReasonText.Trim());
+        newReasonText = string.Empty;
+        reasons = await DataManagementService.GetCleaningPurposeReasonsAsync();
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = "Purpose added.";
+        AlertSeverityVisible = "d-block";
+    }
+
+    async Task OnReasonCommitted(DataLoggingCleaningPurposeReason row)
+    {
+        await DataManagementService.UpdateCleaningPurposeReasonAsync(row.Id, row.Reason);
+        reasons = await DataManagementService.GetCleaningPurposeReasonsAsync();
+    }
+
+    async Task DeleteReasonAsync(DataLoggingCleaningPurposeReason row)
+    {
+        await DataManagementService.DeleteCleaningPurposeReasonAsync(row.Id);
+        reasons = await DataManagementService.GetCleaningPurposeReasonsAsync();
+    }
+}

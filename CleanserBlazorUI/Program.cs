@@ -91,6 +91,13 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         // every environment's connection string to remember it.
         sqlOptions.CommandTimeout(300)));
 
+var xdsDataLogConnectionString = builder.Configuration.GetConnectionString("XdsDataLogDbConnection")
+    ?? throw new InvalidOperationException("Connection string 'XdsDataLogDbConnection' not found.");
+
+builder.Services.AddDbContext<XdsDataLogDbContext>(options =>
+    options.UseSqlServer(xdsDataLogConnectionString, sqlOptions =>
+        sqlOptions.CommandTimeout(300)));
+
 builder.Services.AddQuickGridEntityFrameworkAdapter();
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 

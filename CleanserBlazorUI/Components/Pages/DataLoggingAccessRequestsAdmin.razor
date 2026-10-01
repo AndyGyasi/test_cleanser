@@ -1,0 +1,151 @@
+@page "/data-logging-access-requests"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+
+@attribute [Authorize(Roles = "admin")]
+
+<MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
+
+<MudText Typo="Typo.h5" Class="mb-4">Data Logging Access Requests</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Requests to override the "assigned to someone else" gate for a specific file (the "not logged at all" gate has
+    no override -- see Files Not Yet Logged). Approving a request lets that user clean that one file on their next
+    attempt; it does not change who the file is actually assigned to.
+</MudText>
+
+<MudPaper Class="pa-4 mb-4" Outlined="true">
+    <MudText Typo="Typo.h6" Class="mb-2">Reasons</MudText>
+    <MudText Typo="Typo.body2" Class="mb-2">Purposes a user can select when submitting a request.</MudText>
+    <MudGrid Class="mb-2">
+        <MudItem xs="12" sm="8">
+            <MudTextField @bind-Value="newReasonText" Label="New reason" />
+        </MudItem>
+        <MudItem xs="12" sm="4" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="AddReasonAsync">Add Reason</MudButton>
+        </MudItem>
+    </MudGrid>
+    <MudDataGrid T="DataLoggingAccessRequestReason" Items="@reasons" ReadOnly="false"
+                 EditMode="DataGridEditMode.Form" EditTrigger="DataGridEditTrigger.Manual"
+                 CommittedItemChanges="OnReasonCommitted"
+                 Bordered="true" Striped="true" Dense="true">
+        <Columns>
+            <PropertyColumn Property="x => x.Reason" Title="Reason" />
+            <TemplateColumn Title="" Sortable="false" Filterable="false">
+                <CellTemplate>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                               OnClick="@(() => context.Actions.StartEditingItemAsync())">Edit</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Class="ml-2"
+                               OnClick="@(() => DeleteReasonAsync(context.Item))">Delete</MudButton>
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <NoRecordsContent><MudText>No reasons yet.</MudText></NoRecordsContent>
+    </MudDataGrid>
+</MudPaper>
+
+<MudText Typo="Typo.h6" Class="mb-2">Requests</MudText>
+<MudDataGrid T="DataLoggingAccessRequest" Items="@requests" Loading="@isLoading"
+             Filterable="true" SortMode="SortMode.Multiple" Bordered="true" Striped="true" Dense="true">
+    <Columns>
+        <PropertyColumn Property="x => x.Filename" Title="Filename" />
+        <PropertyColumn Property="x => x.DataProvider" Title="Data Provider" />
+        <PropertyColumn Property="x => x.SubCode" Title="SubCode" />
+        <PropertyColumn Property="x => x.SubXDSCode" Title="SubXDSCode" />
+        <TemplateColumn Title="Category" Sortable="false" Filterable="false">
+            <CellTemplate>@(context.Item.SubCategoryCode != null && categoryLookup.TryGetValue(context.Item.SubCategoryCode, out var cat) ? cat : context.Item.SubCategoryCode)</CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.RequestedByEmail" Title="Requested By" />
+        <PropertyColumn Property="x => x.AssignedToEmail" Title="Assigned To" />
+        <PropertyColumn Property="x => x.Reason" Title="Reason" />
+        <PropertyColumn Property="x => x.RequestDate" Title="Requested">
+            <CellTemplate>@context.Item.RequestDate.ToString("dd MMM yyyy HH:mm")</CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Status" Title="Status" />
+        <PropertyColumn Property="x => x.ReviewedByEmail" Title="Reviewed By" />
+        <TemplateColumn Title="Action" Sortable="false" Filterable="false">
+            <CellTemplate>
+                @if (context.Item.Status == DataLoggingAccessRequestStatus.Pending)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                               OnClick="@(() => ReviewAsync(context.Item, true))">Approve</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" Class="ml-2"
+                               OnClick="@(() => ReviewAsync(context.Item, false))">Deny</MudButton>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="DataLoggingAccessRequest" PageSizeOptions="new[] { 25, 50, 100 }" />
+    </PagerContent>
+    <NoRecordsContent>
+        <MudText>No access requests yet.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;
+    string AlertSeverityVisible = "d-none";
+    string AlertSeverityMessage = string.Empty;
+    bool isLoading;
+
+    List<DataLoggingAccessRequestReason> reasons = new();
+    List<DataLoggingAccessRequest> requests = new();
+    Dictionary<string, string> categoryLookup = new();
+    string newReasonText = string.Empty;
+
+    [CascadingParameter] private Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState>? AuthStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        categoryLookup = await DataManagementService.GetSubscriberCategoryLookupAsync();
+        await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        isLoading = true;
+        reasons = await DataManagementService.GetAccessRequestReasonsAsync();
+        requests = await DataManagementService.GetAllAccessRequestsAsync();
+        isLoading = false;
+    }
+
+    async Task<string> GetCurrentUserEmailAsync()
+    {
+        if (AuthStateTask == null) return "unknown";
+        var state = await AuthStateTask;
+        return state.User.Identity?.Name ?? "unknown";
+    }
+
+    async Task AddReasonAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newReasonText)) return;
+
+        await DataManagementService.AddAccessRequestReasonAsync(newReasonText.Trim());
+        newReasonText = string.Empty;
+        reasons = await DataManagementService.GetAccessRequestReasonsAsync();
+    }
+
+    async Task OnReasonCommitted(DataLoggingAccessRequestReason row)
+    {
+        await DataManagementService.UpdateAccessRequestReasonAsync(row.Id, row.Reason);
+        reasons = await DataManagementService.GetAccessRequestReasonsAsync();
+    }
+
+    async Task DeleteReasonAsync(DataLoggingAccessRequestReason row)
+    {
+        await DataManagementService.DeleteAccessRequestReasonAsync(row.Id);
+        reasons = await DataManagementService.GetAccessRequestReasonsAsync();
+    }
+
+    async Task ReviewAsync(DataLoggingAccessRequest row, bool approve)
+    {
+        var reviewedBy = await GetCurrentUserEmailAsync();
+        await DataManagementService.ReviewAccessRequestAsync(row.Id, approve, reviewedBy);
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = approve ? "Request approved." : "Request denied.";
+        AlertSeverityVisible = "d-block";
+
+        await LoadAsync();
+    }
+}

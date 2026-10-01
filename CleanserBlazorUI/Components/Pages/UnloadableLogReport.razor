@@ -1,0 +1,388 @@
+@page "/unloadable-log-report"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+@attribute [Authorize]
+
+<div class="d-flex justify-space-between align-start flex-wrap mb-4" style="gap: 12px;">
+    <div>
+        <MudText Typo="Typo.overline" Color="Color.Secondary">Unloadable log</MudText>
+        <MudText Typo="Typo.h4">Records that couldn't be loaded</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            @if (isAdmin)
+            {
+                <text>Showing unloadable records across every file.</text>
+            }
+            else
+            {
+                <text>Showing unloadable records for files currently assigned to you (via Transact.ReceivedTrans).</text>
+            }
+        </MudText>
+    </div>
+    <div class="d-flex" style="gap: 8px;">
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FileDownload" OnClick="GenerateExcelAsync">Export to Excel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SendToDataProviders">Send to data providers</MudButton>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudGrid Class="mb-2">
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string" Label="Data Provider" MultiSelection="true" @bind-SelectedValues="selectedDataProviders" Clearable="true">
+                @foreach (var p in dataProviderOptions)
+                {
+                    <MudSelectItem T="string" Value="@p">@p</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string" Label="Subscriber Category" MultiSelection="true" @bind-SelectedValues="selectedSubscriberCategories" Clearable="true">
+                @foreach (var c in subscriberCategoryOptions)
+                {
+                    <MudSelectItem T="string" Value="@c">@c</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string" Label="Reporting Period" MultiSelection="true" @bind-SelectedValues="selectedReportingPeriods" Clearable="true">
+                @foreach (var p in reportingPeriodOptions)
+                {
+                    <MudSelectItem T="string" Value="@p">@p</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string" Label="Reporting Year" MultiSelection="true" @bind-SelectedValues="selectedReportingYears" Clearable="true">
+                @foreach (var y in reportingYearOptions)
+                {
+                    <MudSelectItem T="string" Value="@y">@y</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string" Label="Error Description" MultiSelection="true" @bind-SelectedValues="selectedErrorDescriptions" Clearable="true">
+                @foreach (var e in errorDescriptionOptions)
+                {
+                    <MudSelectItem T="string" Value="@e">@e</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string" Label="Error Category" MultiSelection="true" @bind-SelectedValues="selectedTopLevelCategories" Clearable="true">
+                @foreach (var tc in topLevelCategoryOptions)
+                {
+                    <MudSelectItem T="string" Value="@tc">@tc</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string" Label="Error Sub Category" MultiSelection="true" @bind-SelectedValues="selectedSubCategories" Clearable="true">
+                @foreach (var sc in subCategoryOptions)
+                {
+                    <MudSelectItem T="string" Value="@sc">@sc</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3" Class="d-flex align-center">
+            <MudButton Variant="Variant.Outlined" OnClick="ResetFilters">Reset Filters</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <div class="d-flex align-center mb-4" style="gap: 12px;">
+        <MudToggleGroup T="string" @bind-Value="viewMode" Color="Color.Primary" Dense="true">
+            <MudToggleItem Value="@("records")" Text="Records" />
+            <MudToggleItem Value="@("visuals")" Text="Visuals" />
+        </MudToggleGroup>
+    </div>
+
+    @if (viewMode == "visuals")
+    {
+        <MudGrid Class="mb-4">
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.caption">Unloadable records</MudText>
+                    <MudText Typo="Typo.h5">@totalRecords.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.caption">Top error</MudText>
+                    <MudText Typo="Typo.h6">@topError</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.caption">Top data provider</MudText>
+                    <MudText Typo="Typo.h6">@topDataProvider</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.caption">Share of total</MudText>
+                    <MudText Typo="Typo.h5">@shareOfTotal.ToString("0.0")%</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Records by error description</MudText>
+                    <MudChart ChartType="ChartType.Bar" ChartSeries="@errorDescSeries" XAxisLabels="@errorDescLabels" Width="100%" Height="320px" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Trend by reporting period</MudText>
+                    <MudChart ChartType="ChartType.Line" ChartSeries="@trendSeries" XAxisLabels="@trendLabels" Width="100%" Height="320px" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">By subscriber category</MudText>
+                    <MudChart ChartType="ChartType.Pie" InputData="@categoryPieData" InputLabels="@categoryPieLabels" Width="100%" Height="320px" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">By data provider</MudText>
+                    <MudChart ChartType="ChartType.Bar" ChartSeries="@providerSeries" XAxisLabels="@providerLabels" Width="100%" Height="320px" />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+    else
+    {
+        <MudPaper Class="pa-4 mb-2" Outlined="true">
+            <div class="d-flex justify-space-between align-center flex-wrap" style="gap: 8px;">
+                <MudText Typo="Typo.subtitle1">Unloadable records</MudText>
+                <MudTextField T="string" @bind-Value="quickSearch" Placeholder="Search by filename, data provider or associate" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Style="max-width: 360px" />
+            </div>
+        </MudPaper>
+        <MudDataGrid T="UnloadableLogReportRow" Items="@searchedRows" Filterable="true" SortMode="SortMode.Multiple" Bordered="true" Striped="true" Dense="true">
+            <Columns>
+                <PropertyColumn Property="x => x.Filename" Title="Filename" />
+                <PropertyColumn Property="x => x.DataProvider" Title="Data Provider" />
+                <PropertyColumn Property="x => x.SubCategoryDescription" Title="Subscriber Category" />
+                <PropertyColumn Property="x => x.Associate" Title="Associate" />
+                <PropertyColumn Property="x => x.ReportingPeriod" Title="Reporting Period" />
+                <PropertyColumn Property="x => x.ReportingYear" Title="Reporting Year" />
+                <PropertyColumn Property="x => x.DataType" Title="DataType" />
+                <PropertyColumn Property="x => x.NumberOfRecords" Title="Records" />
+                <PropertyColumn Property="x => x.DateEmailed" Title="Date Emailed">
+                    <CellTemplate>@(context.Item.DateEmailed?.ToString("dd MMM yyyy") ?? "")</CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.DateFixed" Title="Date Fixed">
+                    <CellTemplate>@(context.Item.DateFixed?.ToString("dd MMM yyyy") ?? "")</CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.Comments" Title="Comments" />
+            </Columns>
+            <PagerContent>
+                <MudDataGridPager T="UnloadableLogReportRow" PageSizeOptions="new[] { 25, 50, 100 }" />
+            </PagerContent>
+            <NoRecordsContent>
+                <MudText>No unloadable records match the current filters.</MudText>
+            </NoRecordsContent>
+        </MudDataGrid>
+    }
+}
+
+@code {
+    bool isLoading = true;
+    bool isAdmin;
+    List<UnloadableLogReportRow> allRows = new();
+
+    IEnumerable<string> selectedDataProviders = new HashSet<string>();
+    IEnumerable<string> selectedSubscriberCategories = new HashSet<string>();
+    IEnumerable<string> selectedReportingPeriods = new HashSet<string>();
+    IEnumerable<string> selectedReportingYears = new HashSet<string>();
+    IEnumerable<string> selectedErrorDescriptions = new HashSet<string>();
+    IEnumerable<string> selectedTopLevelCategories = new HashSet<string>();
+    IEnumerable<string> selectedSubCategories = new HashSet<string>();
+
+    string viewMode = "records";
+    string quickSearch = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var appUser = await UserManager.GetUserAsync(authState.User);
+        isAdmin = appUser != null && await UserManager.IsInRoleAsync(appUser, "admin");
+
+        allRows = await DataManagementService.GetUnloadableLogReportDataAsync(isAdmin, appUser?.ReceivedTransUserID);
+        isLoading = false;
+    }
+
+    // ── Filter option lists -- derived from the full accessible set, not the ──
+    // currently filtered one, except Data Provider which narrows to the
+    // selected Subscriber Category(ies) per the requirement that an associate
+    // only sees providers (within that category) actually assigned to them.
+    IEnumerable<string> dataProviderOptions =>
+        (selectedSubscriberCategories.Any()
+            ? allRows.Where(r => r.SubCategoryDescription != null && selectedSubscriberCategories.Contains(r.SubCategoryDescription))
+            : allRows)
+        .Select(r => r.DataProvider).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(d => d);
+
+    IEnumerable<string> subscriberCategoryOptions =>
+        allRows.Select(r => r.SubCategoryDescription).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c)!;
+
+    IEnumerable<string> reportingPeriodOptions =>
+        allRows.Select(r => r.ReportingPeriod).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().OrderBy(p => p);
+
+    IEnumerable<string> reportingYearOptions =>
+        allRows.Select(r => r.ReportingYear).Where(y => !string.IsNullOrWhiteSpace(y)).Distinct().OrderBy(y => y);
+
+    IEnumerable<string> errorDescriptionOptions =>
+        allRows.SelectMany(r => r.MessageDetails).Select(m => m.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)).Distinct().OrderBy(m => m);
+
+    IEnumerable<string> topLevelCategoryOptions =>
+        allRows.SelectMany(r => r.CategoryDetails).Select(c => c.TopLevelCategory).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c);
+
+    IEnumerable<string> subCategoryOptions =>
+        allRows.SelectMany(r => r.CategoryDetails).Select(c => c.SubCategory).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c);
+
+    // ── The actual filtered dataset -- drives the table, the charts, and the Excel export ──
+    List<UnloadableLogReportRow> filteredRows => allRows.Where(r =>
+        (!selectedDataProviders.Any() || selectedDataProviders.Contains(r.DataProvider)) &&
+        (!selectedSubscriberCategories.Any() || (r.SubCategoryDescription != null && selectedSubscriberCategories.Contains(r.SubCategoryDescription))) &&
+        (!selectedReportingPeriods.Any() || selectedReportingPeriods.Contains(r.ReportingPeriod)) &&
+        (!selectedReportingYears.Any() || selectedReportingYears.Contains(r.ReportingYear)) &&
+        (!selectedErrorDescriptions.Any() || r.MessageDetails.Any(m => selectedErrorDescriptions.Contains(m.ErrorMessage))) &&
+        (!selectedTopLevelCategories.Any() || r.CategoryDetails.Any(c => selectedTopLevelCategories.Contains(c.TopLevelCategory))) &&
+        (!selectedSubCategories.Any() || r.CategoryDetails.Any(c => selectedSubCategories.Contains(c.SubCategory)))
+    ).ToList();
+
+    // Free-text search layered on top of the dropdown filters, for the
+    // Records view's search box -- matches the sample's "search" affordance,
+    // scoped to the fields this table actually has (run-level data, not
+    // individual failed records -- see the entity's own doc comment for why).
+    List<UnloadableLogReportRow> searchedRows => string.IsNullOrWhiteSpace(quickSearch)
+        ? filteredRows
+        : filteredRows.Where(r =>
+            r.Filename.Contains(quickSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.DataProvider.Contains(quickSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.Associate.Contains(quickSearch, StringComparison.OrdinalIgnoreCase))
+          .ToList();
+
+    void ResetFilters()
+    {
+        selectedDataProviders = new HashSet<string>();
+        selectedSubscriberCategories = new HashSet<string>();
+        selectedReportingPeriods = new HashSet<string>();
+        selectedReportingYears = new HashSet<string>();
+        selectedErrorDescriptions = new HashSet<string>();
+        selectedTopLevelCategories = new HashSet<string>();
+        selectedSubCategories = new HashSet<string>();
+    }
+
+    // ── KPIs ──────────────────────────────────────────────────────────────
+    int totalRecords => filteredRows.Sum(r => r.NumberOfRecords);
+
+    string topError
+    {
+        get
+        {
+            var top = filteredRows.SelectMany(r => r.MessageDetails)
+                .GroupBy(m => m.ErrorMessage)
+                .Select(g => new { Message = g.Key, Count = g.Sum(m => m.Count) })
+                .OrderByDescending(g => g.Count)
+                .FirstOrDefault();
+            return top?.Message ?? "-";
+        }
+    }
+
+    string topDataProvider
+    {
+        get
+        {
+            var top = filteredRows.GroupBy(r => r.DataProvider)
+                .Select(g => new { Provider = g.Key, Records = g.Sum(r => r.NumberOfRecords) })
+                .OrderByDescending(g => g.Records)
+                .FirstOrDefault();
+            return top?.Provider ?? "-";
+        }
+    }
+
+    double shareOfTotal
+    {
+        get
+        {
+            var overall = allRows.Sum(r => r.NumberOfRecords);
+            return overall > 0 ? (double)totalRecords / overall * 100 : 0;
+        }
+    }
+
+    // ── Charts ────────────────────────────────────────────────────────────
+    List<ChartSeries> errorDescSeries =>
+        new() { new ChartSeries { Name = "Records", Data = ErrorDescGroups().Select(g => (double)g.Count).ToArray() } };
+    string[] errorDescLabels => ErrorDescGroups().Select(g => g.Message).ToArray();
+
+    List<(string Message, int Count)> ErrorDescGroups() =>
+        filteredRows.SelectMany(r => r.MessageDetails)
+            .GroupBy(m => m.ErrorMessage)
+            .Select(g => (Message: g.Key, Count: g.Sum(m => m.Count)))
+            .OrderByDescending(g => g.Count)
+            .Take(10)
+            .ToList();
+
+    static readonly string[] MonthOrder = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+    static readonly string[] MonthLabels = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
+    string[] trendLabels => MonthLabels;
+    List<ChartSeries> trendSeries =>
+        filteredRows.Select(r => r.LogYear).Where(y => !string.IsNullOrWhiteSpace(y)).Distinct().OrderBy(y => y)
+            .Select(year => new ChartSeries
+            {
+                Name = year,
+                Data = MonthOrder.Select(month => (double)filteredRows
+                    .Where(r => r.LogYear == year && r.Months == month)
+                    .Sum(r => r.NumberOfRecords)).ToArray()
+            }).ToList();
+
+    double[] categoryPieData => CategoryGroups().Select(g => (double)g.Records).ToArray();
+    string[] categoryPieLabels => CategoryGroups().Select(g => g.Category).ToArray();
+
+    List<(string Category, int Records)> CategoryGroups() =>
+        filteredRows.Where(r => !string.IsNullOrWhiteSpace(r.SubCategoryDescription))
+            .GroupBy(r => r.SubCategoryDescription!)
+            .Select(g => (Category: g.Key, Records: g.Sum(r => r.NumberOfRecords)))
+            .OrderByDescending(g => g.Records)
+            .ToList();
+
+    List<ChartSeries> providerSeries =>
+        new() { new ChartSeries { Name = "Records", Data = ProviderGroups().Select(g => (double)g.Records).ToArray() } };
+    string[] providerLabels => ProviderGroups().Select(g => g.Provider).ToArray();
+
+    List<(string Provider, int Records)> ProviderGroups() =>
+        filteredRows.GroupBy(r => r.DataProvider)
+            .Select(g => (Provider: g.Key, Records: g.Sum(r => r.NumberOfRecords)))
+            .OrderByDescending(g => g.Records)
+            .Take(10)
+            .ToList();
+
+    // ── Export ────────────────────────────────────────────────────────────
+    async Task GenerateExcelAsync()
+    {
+        var bytes = CleanserBlazorUI.Services.UnloadableLogService.GenerateCombinedWorkbook(filteredRows);
+        await JS.InvokeVoidAsync("downloadFile", $"UnloadableLogReport_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    // UI only for now -- actual delivery (email, which address, what gets
+    // attached) is still to be decided, so this intentionally doesn't send
+    // anything yet rather than guess at a real external-facing action.
+    void SendToDataProviders()
+    {
+        Snackbar.Add("Sending to data providers isn't wired up yet -- this button is a placeholder for now.", MudBlazor.Severity.Info);
+    }
+}

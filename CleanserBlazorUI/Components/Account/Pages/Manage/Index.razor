@@ -8,20 +8,16 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityUserAccessor UserAccessor
 @inject IdentityRedirectManager RedirectManager
+<MudText Typo="Typo.h5" Class="mb-4">Profile</MudText>
 <StatusMessage />
 
-<div class="row">
-    <div class="col-md-6">
-        <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3" style="width: 460px">
-                <input type="text" value="@username" class="form-control" placeholder="Please choose your username." disabled />
-                <label for="username" class="form-label">Username</label>
-            </div>
-        </EditForm>
-    </div>
-</div>
+<EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" role="alert" />
+    <MudTextField T="string?" Value="@username" Label="Username" ReadOnly="true" Disabled="true" Class="mb-3" Style="max-width: 420px" />
+    <MudTextField T="string?" @bind-Value="Input.PhoneNumber" For="@(() => Input.PhoneNumber)" Label="Phone number" Class="mb-4" Style="max-width: 420px" />
+    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+</EditForm>
 @code {
     private ApplicationUser user = default!;
     private string? username;

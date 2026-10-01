@@ -4,49 +4,19 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject FileCleanupSettingsService SettingsService
 
-<ul class="nav nav-pills flex-column">
-    <li class="nav-item py-1">
-        <NavLink class="nav-link" href="Account/Manage" Match="NavLinkMatch.All">Profile</NavLink>
-    </li>
-    <li class="nav-item py-1">
-        <NavLink class="nav-link" href="Account/Manage/Email">Email</NavLink>
-    </li>
-    <li class="nav-item py-1">
-        <NavLink class="nav-link" href="Account/Manage/ChangePassword">Password</NavLink>
-    </li>
+@* Scoped to account-settings pages only now -- the admin links that used to
+   duplicate here (Register User, Manage Users, Reference Data, etc.) live
+   in the main sidebar (NavMenu.razor) so there's one place to find them
+   instead of two partial lists. *@
+<MudNavMenu>
+    <MudNavLink Href="Account/Manage" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Person">Profile</MudNavLink>
+    <MudNavLink Href="Account/Manage/Email" Icon="@Icons.Material.Filled.Email">Email</MudNavLink>
+    <MudNavLink Href="Account/Manage/ChangePassword" Icon="@Icons.Material.Filled.Lock">Password</MudNavLink>
     @if (hasExternalLogins)
     {
-        <li class="nav-item py-1">
-            <NavLink class="nav-link" href="Account/Manage/ExternalLogins">External logins</NavLink>
-        </li>
+        <MudNavLink Href="Account/Manage/ExternalLogins" Icon="@Icons.Material.Filled.Link">External logins</MudNavLink>
     }
-
-    
-    
-       <AuthorizeView Roles="admin">
-        <li class="nav-item py-1">
-            <NavLink class="nav-link" href="Account/Register" Match="NavLinkMatch.All">Register User</NavLink>
-        </li>
-        <li class="nav-item py-1">
-            <NavLink class="nav-link" href="Businessnames">Add Business Names</NavLink>
-        </li>
-        <li class="nav-item py-1">
-            <NavLink class="nav-link" href="Manageroles">Manager Users</NavLink>
-        </li>
-        <li class="nav-item py-1">
-            <NavLink class="nav-link" href="Business-names-normalizer">Business Name Mapping</NavLink>
-        </li>
-        <li class="nav-item py-1">
-            <NavLink class="nav-link" href="schedule-automatic-cleanup">Schedule Automatic Cleanup</NavLink>
-        </li>
-        <li class="nav-item py-1">
-            <NavLink class="nav-link" href="reference-data-conflicts">Reference Data Conflicts</NavLink>
-        </li>
-        <li class="nav-item py-1">
-            <NavLink class="nav-link" href="reference-data-bulk-update">Bulk Update Reference Data</NavLink>
-        </li>
-       </AuthorizeView>
-</ul>
+</MudNavMenu>
 
 @code {
     private bool hasExternalLogins;

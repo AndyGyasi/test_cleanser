@@ -1,6 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @implements IDisposable
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 @using CleanserBlazorUI.Theme
 
 <MudThemeProvider @bind-IsDarkMode="@IsDark" Theme="@CleanserTheme.Default" />
@@ -14,50 +15,41 @@
 <MudDialogProvider @rendermode="InteractiveServer" />
 <MudSnackbarProvider @rendermode="InteractiveServer" />
 
-<MudAppBar Fixed="true" Dense="false" Elevation="0">
-    <MudLink Href="/">
-        <MudImage Style="padding: 5px;" Src="logocolor.png" Height="55" Width="110"></MudImage>
-    </MudLink>
+<MudLayout>
+    @* No top app bar -- the sidebar (logo + nav + user/logout) is the only
+       chrome, matching the reference design. This small bar only exists to
+       hold the drawer toggle on mobile/narrow screens where the sidebar is
+       collapsed by default; it's hidden at desktop widths. *@
+    <MudAppBar Fixed="true" Dense="true" Elevation="0" Class="d-flex d-md-none">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@(() => drawerOpen = !drawerOpen)" />
+        <MudImage Src="logocolor.png" Height="32" />
+    </MudAppBar>
 
-    <MudSpacer />
-    <AuthorizeView>
-        <Authorized>
+    <MudDrawer @bind-Open="drawerOpen" Elevation="1" Variant="@DrawerVariant.Responsive" Breakpoint="Breakpoint.Md" Width="260px">
+        <NavMenu />
+    </MudDrawer>
 
-            <MudLink class="nav-link" href="Account/Manage">
-                <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name
-            </MudLink>
-            <div class="nav-item px-3">
-                <form action="Account/Logout" method="post">
-                    <AntiforgeryToken />
-                    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                    <button type="submit" class="nav-link">
-                        <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
-                    </button>
-                </form>
-            </div>
-        </Authorized>
-        <NotAuthorized>
-            <MudButton Href="Account/Login" Color="Color.Primary" Variant="Variant.Filled">Login</MudButton>
-        </NotAuthorized>
-    </AuthorizeView>
-</MudAppBar>
-
-<MudMainContent Style="overflow: hidden;">
-    <MudContainer Style="min-height: 100vh; overflow-y: hidden;" MaxWidth="MaxWidth.ExtraExtraLarge" Class="my-sample-main-content-container my-4 pt-4">
-        @Body
-        <MudAppBar Bottom="true" Fixed="true" Dense="@true" Elevation="0" Style="width: 100%; padding-top: 10px">
-            <MudSpacer></MudSpacer>
-            <MudPaper Elevation="0" style="background-color: transparent">
-                <div>
-                    Cleanser © @DateTime.Now.Year.ToString() <strong>XDS Data</strong>. All rights reserved.
-                    <a href="/privacy-policy" style="color: var(--mud-palette-primary); text-decoration: none;">Privacy Policy</a> |
-                    <a href="/terms-of-service" style="color: var(--mud-palette-primary); text-decoration: none;">Terms of Service</a> |
-                    <a href="/cookie-policy" style="color: var(--mud-palette-primary); text-decoration: none;">Cookie Policy</a>
-                </div>
-            </MudPaper>
-        </MudAppBar>
-    </MudContainer>
-</MudMainContent>
+    <MudMainContent Class="d-flex flex-column" Style="min-height: 100vh;">
+        <div class="d-flex justify-end pa-2 d-none d-md-flex">
+            <MudTooltip Text="@(IsDark ? "Switch to light theme" : "Switch to dark theme")">
+                <MudIconButton Icon="@(IsDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                               Color="Color.Default" Size="Size.Small" OnClick="ToggleThemeAsync" />
+            </MudTooltip>
+        </div>
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="flex-grow-1 pb-4">
+            @Body
+        </MudContainer>
+        <MudDivider />
+        <div class="d-flex justify-center pa-4">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Cleanser © @DateTime.Now.Year.ToString() <strong>XDS Data</strong>. All rights reserved.
+                <MudLink Href="/privacy-policy" Class="mx-1">Privacy Policy</MudLink> |
+                <MudLink Href="/terms-of-service" Class="mx-1">Terms of Service</MudLink> |
+                <MudLink Href="/cookie-policy" Class="mx-1">Cookie Policy</MudLink>
+            </MudText>
+        </div>
+    </MudMainContent>
+</MudLayout>
 
 <div id="blazor-error-ui">
     <a class="dismiss">🗙</a>
@@ -65,6 +57,7 @@
 
 @code {
     public bool IsDark { get; set; } = true;
+    bool drawerOpen = true;
 
     private string? currentUrl;
 
@@ -72,6 +65,48 @@
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    // Theme choice is per-browser, not per-account -- read it back from
+    // localStorage once the circuit is actually connected (OnInitialized
+    // runs before JS interop is available), so a returning visitor doesn't
+    // get flashed back to the dark default every page load.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", "cleanser-theme");
+                if (saved == "light" && IsDark)
+                {
+                    IsDark = false;
+                    StateHasChanged();
+                }
+                else if (saved == "dark" && !IsDark)
+                {
+                    IsDark = true;
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                // Prerendering or JS interop unavailable yet -- keep the default.
+            }
+        }
+    }
+
+    async Task ToggleThemeAsync()
+    {
+        IsDark = !IsDark;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "cleanser-theme", IsDark ? "dark" : "light");
+        }
+        catch
+        {
+            // Not fatal -- the toggle still works for this session even if saving fails.
+        }
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)

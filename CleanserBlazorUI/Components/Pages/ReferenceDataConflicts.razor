@@ -11,9 +11,9 @@
 <MudGrid Class="mb-4">
     <MudItem xs="12" sm="6" md="4">
         <MudSelect T="string" Label="Data Provider" @bind-Value="selectedSubscriberCode" Clearable="true">
-            @foreach (var profile in subscriberProfiles)
+            @foreach (var provider in dataProviders)
             {
-                <MudSelectItem T="string" Value="@profile.SubscriberCode">@profile.SubscriberName (@profile.SubscriberCode)</MudSelectItem>
+                <MudSelectItem T="string" Value="@provider.ShortName">@provider.DisplayLabel</MudSelectItem>
             }
         </MudSelect>
     </MudItem>
@@ -114,17 +114,20 @@
             Directly fix a record's DOB or ID fields for the selected Data Provider, even if it was never auto-flagged as a conflict.
         </MudText>
         <MudGrid Class="mb-4">
-            <MudItem xs="12" sm="4">
+            <MudItem xs="12" sm="3">
                 <MudSelect T="string" Label="Type" @bind-Value="searchEntityType">
                     <MudSelectItem T="string" Value="@("Individual")">Individual</MudSelectItem>
                     <MudSelectItem T="string" Value="@("Business")">Business</MudSelectItem>
                     <MudSelectItem T="string" Value="@("IndividualMobile")">Individual Mobile</MudSelectItem>
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12" sm="4">
+            <MudItem xs="12" sm="3">
                 <MudTextField @bind-Value="customerIdSearch" Label="CustomerID" />
             </MudItem>
-            <MudItem xs="12" sm="4" Class="d-flex align-center">
+            <MudItem xs="12" sm="3">
+                <MudTextField @bind-Value="accountNoSearch" Label="Account No" />
+            </MudItem>
+            <MudItem xs="12" sm="3" Class="d-flex align-center">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="SearchAsync">Search</MudButton>
             </MudItem>
         </MudGrid>
@@ -215,7 +218,7 @@
     string AlertSeverityMessage = string.Empty;
     bool isLoading;
 
-    List<SubscriberProfile> subscriberProfiles = new();
+    List<DataProviderOption> dataProviders = new();
     string? selectedSubscriberCode;
 
     List<ReferenceDataConflict> pendingConflicts = new();
@@ -230,13 +233,14 @@
 
     string searchEntityType = "Individual";
     string customerIdSearch = string.Empty;
+    string accountNoSearch = string.Empty;
     List<IndividualRef> indResults = new();
     List<BusinessRef> busResults = new();
     List<IndividualMobileRef> indMobileResults = new();
 
     protected override async Task OnInitializedAsync()
     {
-        subscriberProfiles = await DataManagementService.GetAllSubscriberProfilesAsync();
+        dataProviders = await DataManagementService.GetAllDataProvidersAsync();
         await LoadPendingConflictsAsync();
     }
 
@@ -304,26 +308,29 @@
 
     async Task SearchAsync()
     {
-        if (string.IsNullOrWhiteSpace(selectedSubscriberCode) || string.IsNullOrWhiteSpace(customerIdSearch))
+        if (string.IsNullOrWhiteSpace(selectedSubscriberCode) ||
+            (string.IsNullOrWhiteSpace(customerIdSearch) && string.IsNullOrWhiteSpace(accountNoSearch)))
         {
             AlertSeverity = MudBlazor.Severity.Warning;
-            AlertSeverityMessage = "Select a Data Provider and enter a CustomerID to search.";
+            AlertSeverityMessage = "Select a Data Provider and enter a CustomerID or Account No to search.";
             AlertSeverityVisible = "d-block";
             return;
         }
 
         AlertSeverityVisible = "d-none";
+        var customerId = customerIdSearch.Trim();
+        var accountNo = accountNoSearch.Trim();
         if (searchEntityType == "Individual")
         {
-            indResults = await DataManagementService.SearchIndividualRefAsync(selectedSubscriberCode.Trim(), customerIdSearch.Trim());
+            indResults = await DataManagementService.SearchIndividualRefAsync(selectedSubscriberCode.Trim(), customerId, accountNo);
         }
         else if (searchEntityType == "Business")
         {
-            busResults = await DataManagementService.SearchBusinessRefAsync(selectedSubscriberCode.Trim(), customerIdSearch.Trim());
+            busResults = await DataManagementService.SearchBusinessRefAsync(selectedSubscriberCode.Trim(), customerId, accountNo);
         }
         else if (searchEntityType == "IndividualMobile")
         {
-            indMobileResults = await DataManagementService.SearchIndividualMobileRefAsync(selectedSubscriberCode.Trim(), customerIdSearch.Trim());
+            indMobileResults = await DataManagementService.SearchIndividualMobileRefAsync(selectedSubscriberCode.Trim(), customerId, accountNo);
         }
     }
 

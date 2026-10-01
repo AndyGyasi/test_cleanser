@@ -4,6 +4,7 @@ using CleanserBlazorUI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CleanserBlazorUI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260930234426_AddDataLoggingAccessRequestsAndUnloggedAttempts")]
+    partial class AddDataLoggingAccessRequestsAndUnloggedAttempts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -247,64 +250,6 @@ namespace CleanserBlazorUI.Migrations
                     b.ToTable("DataLoggingAccessRequestReasons");
                 });
 
-            modelBuilder.Entity("CleanserBlazorUI.Entities.DataLoggingCleaningPurposeLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("DataProvider")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Filename")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PerformedByEmail")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("PerformedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Purpose")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("SubCategoryCode")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("SubCode")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("SubXDSCode")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("DataLoggingCleaningPurposeLogs");
-                });
-
-            modelBuilder.Entity("CleanserBlazorUI.Entities.DataLoggingCleaningPurposeReason", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("DataLoggingCleaningPurposeReasons");
-                });
-
             modelBuilder.Entity("CleanserBlazorUI.Entities.DataLoggingGateMessages", b =>
                 {
                     b.Property<int>("Id")
@@ -518,61 +463,6 @@ namespace CleanserBlazorUI.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("IndividualsData");
-                });
-
-            modelBuilder.Entity("CleanserBlazorUI.Entities.NavItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Href")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("IconKey")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("NavSectionId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("RequiredRoles")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("NavSectionId");
-
-                    b.ToTable("NavItems");
-                });
-
-            modelBuilder.Entity("CleanserBlazorUI.Entities.NavSection", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("NavSections");
                 });
 
             modelBuilder.Entity("CleanserBlazorUI.Entities.ReferenceDataConflict", b =>
@@ -1083,17 +973,6 @@ namespace CleanserBlazorUI.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("CleanserBlazorUI.Entities.NavItem", b =>
-                {
-                    b.HasOne("CleanserBlazorUI.Entities.NavSection", "NavSection")
-                        .WithMany("Items")
-                        .HasForeignKey("NavSectionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("NavSection");
-                });
-
             modelBuilder.Entity("CleanserBlazorUI.Entities.UnloadableLogCategoryDetail", b =>
                 {
                     b.HasOne("CleanserBlazorUI.Entities.UnloadableLogHeader", "UnloadableLogHeader")
@@ -1176,11 +1055,6 @@ namespace CleanserBlazorUI.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("CleanserBlazorUI.Entities.NavSection", b =>
-                {
-                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("CleanserBlazorUI.Entities.UnloadableLogHeader", b =>

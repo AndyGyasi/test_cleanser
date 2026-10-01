@@ -16,113 +16,62 @@ namespace CleanserBlazorUI.Services
     public static class UnloadableLogService
     {
         // ── Message → category mapping ────────────────────────────────────────
-        // Confirmed against a manual audit of every UNL/error message the
-        // codebase actually generates (see chat history for the audit). Not
-        // meant to be exhaustive forever -- add a new rule here whenever a new
-        // message shows up. Anything unmatched falls into "Uncategorized"
-        // rather than silently disappearing from Table 2.
-        //
-        // Order matters: more specific rules must come before broader ones
-        // they could otherwise be swallowed by. In particular, the "cannot
-        // belong to two different people" rule (dual-category: ID Number +
-        // Date of Birth) must be checked before the plain "different dates of
-        // birth" rule, since the former message contains the latter phrase.
-        private static readonly List<(string KeyPhrase, (string Category, string SubCategory)[] Targets)> MessageCategoryRules = new()
-        {
-            // ── Dual-category: counts toward BOTH ID Number and Date of Birth ──
-            ("CANNOT BELONG TO TWO DIFFERENT PEOPLE", new[]
-            {
-                ("Demographic", "ID Number"),
-                ("Demographic", "Date of Birth"),
-            }),
-
-            // ── Demographic: Customer Name ──────────────────────────────────
-            ("SURNAME AND FIRSTNAME ARE MANDATORY", new[] { ("Demographic", "Customer Name") }),
-            ("NAMES CANNOT CONTAIN SEPECIAL CHARACTER", new[] { ("Demographic", "Customer Name") }),
-            ("NAMES CANNOT CONTAIN SPECIAL CHARACTER", new[] { ("Demographic", "Customer Name") }),
-            ("Invalid Business Name", new[] { ("Demographic", "Customer Name") }),
-            ("BUSINESS KEYWORDS DETECTED", new[] { ("Demographic", "Customer Name") }),
-            ("MULTIPLE INDIVIDUALS DETECTED", new[] { ("Demographic", "Customer Name") }),
-            ("NAME PARTIALLY MATCHES", new[] { ("Demographic", "Customer Name") }),
-            ("NAMES PARTIALLY MATCH", new[] { ("Demographic", "Customer Name") }),
-            ("LINKED TO DIFFERENT NAMES ACROSS RECORDS", new[] { ("Demographic", "Customer Name") }),
-            ("DUPLICATE RECORD HAS A DIFFERENT NAME", new[] { ("Demographic", "Customer Name") }),
-
-            // ── Demographic: Date of Birth ──────────────────────────────────
-            ("DIFFERENT DATES OF BIRTH", new[] { ("Demographic", "Date of Birth") }),
-            ("DATE OF BIRTH DOES NOT MATCH PREVIOUS SUBMISSION", new[] { ("Demographic", "Date of Birth") }),
-            ("DUPLICATE WITH DIFFERENT DATE OF BIRTH", new[] { ("Demographic", "Date of Birth") }),
-            ("DUPLICATE WITH SAME OR DIFFERENT DATE OF BIRTH", new[] { ("Demographic", "Date of Birth") }),
-
-            // ── Demographic: ID Number (GH Card + existing ID types) ────────
-            ("WRONG OR EMPTY IDS", new[] { ("Demographic", "ID Number") }),
-            ("DIFFERENT GHANA CARD", new[] { ("Demographic", "ID Number") }),
-            ("INVALID NATIONAL ID FORMAT", new[] { ("Demographic", "ID Number") }),
-            ("SEQUENTIAL PLACEHOLDER VALUE", new[] { ("Demographic", "ID Number") }),
-
-            // ── Demographic: Business Registration Number / TIN ─────────────
-            ("Empty or Invalid Busregnum or Tinum", new[] { ("Demographic", "Business Registration Number / TIN") }),
-            ("BUSREGNUM: CONTAIN INVALID CHARACTERS", new[] { ("Demographic", "Business Registration Number / TIN") }),
-            ("TINUM: CONTAIN INVALID CHARACTERS", new[] { ("Demographic", "Business Registration Number / TIN") }),
-            ("cannot be a Ghana card or contains", new[] { ("Demographic", "Business Registration Number / TIN") }),
-            ("SAME BUSINESS REGISTRATION NUMBER OR TIN", new[] { ("Demographic", "Business Registration Number / TIN") }),
-            ("ALL-NUMERIC REGISTRATION NUMBER", new[] { ("Demographic", "Business Registration Number / TIN") }),
-
-            // ── Financial: Facility Account Number ──────────────────────────
-            ("CREDITFACILITYACCNUM: CONTAIN INVALID CHARACTERS", new[] { ("Financial", "Facility Account Number") }),
-            ("FACILITYACCNUM: CONTAIN INVALID CHARACTERS", new[] { ("Financial", "Facility Account Number") }),
-            ("FACILITY ACCOUNT NUMBER CANNOT BE THE SAME AS CUSTOMERID", new[] { ("Financial", "Facility Account Number") }),
-            ("INVALID ACCOUNT NUMBER - EXPONENTIATED", new[] { ("Financial", "Facility Account Number") }),
-            ("MISSING FACILITY ACCOUNT NUMBER", new[] { ("Financial", "Facility Account Number") }),
-
-            // ── Financial: Customer ID/Number ───────────────────────────────
-            ("CUSTOMERID: CONTAIN INVALID CHARACTERS", new[] { ("Financial", "Customer ID/Number") }),
-            ("CUSTOMERID CANNOT BE THE SAME AS FACILITY ACCOUNT NUMBER", new[] { ("Financial", "Customer ID/Number") }),
-            ("INVALID CUSTOMER ID - EXPONENTIATED", new[] { ("Financial", "Customer ID/Number") }),
-
-            // ── Financial: Loan/Disbursement Amount ─────────────────────────
-            ("FACILITYAMOUNT, DISBURSEMENTAMT CANNOT BE EMPTY OR ZERO", new[] { ("Financial", "Loan/Disbursement Amount") }),
-
-            // ── Financial: Current Balance / Arrears (combined -- these ─────
-            // checks validate current balance, amount in arrears, written-off
-            // amount, and NDIA jointly; splitting them across separate
-            // category rows would misrepresent what the check actually does.
-            ("CURRENT BALANCE", new[] { ("Financial", "Current Balance / Arrears") }),
-            ("CURRENTBALANCE", new[] { ("Financial", "Current Balance / Arrears") }),
-            ("AMOUNT IN ARREARS", new[] { ("Financial", "Current Balance / Arrears") }),
-            ("WRITTENOFFAMOUNT", new[] { ("Financial", "Current Balance / Arrears") }),
-            ("WRITTEN OF AMOUNT", new[] { ("Financial", "Current Balance / Arrears") }),
-
-            // ── Facility & Submission ────────────────────────────────────────
-            ("Invalid FacilityStatusCode", new[] { ("FacilitySubmission", "Facility Status") }),
-            ("DISBURSEMENT DATE CANNOT BE GREATER THAN MATURITY DATE", new[] { ("FacilitySubmission", "Disbursement Date") }),
-            ("DISBURSEMENT DATE CANNOT BE GREATER THAN SUBMISSION DATE", new[] { ("FacilitySubmission", "Disbursement Date") }),
-            ("DUPLICATE WITH SAME OR DIFFERENT DATE OF DISBURSEMENTDATE", new[] { ("FacilitySubmission", "Disbursement Date") }),
-            ("DisbursementDate is greater than the reporting period", new[] { ("FacilitySubmission", "Disbursement Date") }),
-        };
-
+        // Driven by the UnloadableErrorCatalogEntries table (see the
+        // Unloadable Error Catalog page) instead of a hardcoded list, so new
+        // error codes/categories can be added without a code deployment.
+        // Anything unmatched falls into "Uncategorized" rather than silently
+        // disappearing from Table 2.
         private static readonly (string Category, string SubCategory)[] UncategorizedTarget =
         {
             ("Uncategorized", "Uncategorized")
         };
 
         /// <summary>
-        /// Returns every (Category, SubCategory) this message counts toward --
-        /// more than one entry only for the deliberate dual-category rule
-        /// above. Falls back to "Uncategorized" rather than silently dropping
-        /// an unmapped message.
+        /// Returns the (Category, SubCategory) this message counts toward,
+        /// per the first catalog entry whose DescriptionOfErrors pattern
+        /// matches. Falls back to "Uncategorized" rather than silently
+        /// dropping an unmapped message.
         /// </summary>
-        public static (string Category, string SubCategory)[] CategorizeMessage(string message)
+        public static (string Category, string SubCategory)[] CategorizeMessage(
+            string message, IReadOnlyList<UnloadableErrorCatalogEntry> catalog)
         {
             if (string.IsNullOrWhiteSpace(message)) return UncategorizedTarget;
-            foreach (var rule in MessageCategoryRules)
+            if (catalog != null)
             {
-                if (message.Contains(rule.KeyPhrase, StringComparison.OrdinalIgnoreCase))
+                foreach (var entry in catalog)
                 {
-                    return rule.Targets;
+                    if (MatchesCatalogPattern(message, entry.DescriptionOfErrors))
+                    {
+                        return new[] { (entry.TopLevelCategory, entry.SubCategory) };
+                    }
                 }
             }
             return UncategorizedTarget;
+        }
+
+        /// <summary>
+        /// A catalog pattern may contain literal wording plus {placeholder}
+        /// segments standing in for real per-record values (a real ID, a real
+        /// date) that the actual message already has substituted in -- so we
+        /// never match those segments literally. We strip them out and
+        /// require every remaining literal fragment (longer than a couple
+        /// characters, so stray punctuation doesn't count) to appear in the
+        /// message. A message documenting two distinct variants should be two
+        /// separate catalog rows rather than one row joined by "or" -- "or" is
+        /// too common a plain-English word in these messages to safely treat
+        /// as a phrasing separator.
+        /// </summary>
+        private static bool MatchesCatalogPattern(string message, string pattern)
+        {
+            if (string.IsNullOrWhiteSpace(pattern)) return false;
+
+            var fragments = System.Text.RegularExpressions.Regex
+                .Split(pattern, @"\{[^}]*\}")
+                .Select(f => f.Trim(' ', '-', ':', ';', '—', '(', ')'))
+                .Where(f => f.Length > 2)
+                .ToList();
+
+            return fragments.Count > 0 && fragments.All(f => message.Contains(f, StringComparison.OrdinalIgnoreCase));
         }
 
         public class MessageRejectionSummary
@@ -190,7 +139,7 @@ namespace CleanserBlazorUI.Services
         /// it's not a UNL-population statistic.
         /// </summary>
         public static List<MessageRejectionSummary> SummarizeByMessage<T>(
-            List<T> unlRecords, int duplicateCount, int totalRecordsInFile)
+            List<T> unlRecords, IReadOnlyList<UnloadableErrorCatalogEntry> catalog, int duplicateCount, int totalRecordsInFile)
         {
             var results = new List<MessageRejectionSummary>();
             int unlTotal = unlRecords?.Count ?? 0;
@@ -223,7 +172,7 @@ namespace CleanserBlazorUI.Services
 
                 foreach (var kvp in messageToRecords)
                 {
-                    var targets = CategorizeMessage(kvp.Key);
+                    var targets = CategorizeMessage(kvp.Key, catalog);
                     results.Add(new MessageRejectionSummary
                     {
                         ErrorMessage = kvp.Key,
@@ -259,7 +208,7 @@ namespace CleanserBlazorUI.Services
         /// duplicateCount used in Table 1, not rediscovered here.
         /// </summary>
         public static List<CategoryRejectionSummary> SummarizeByCategory<T>(
-            List<T> unlRecords, string topLevelCategory, int duplicateCountForFacilitySubmission = 0)
+            List<T> unlRecords, IReadOnlyList<UnloadableErrorCatalogEntry> catalog, string topLevelCategory, int duplicateCountForFacilitySubmission = 0)
         {
             var results = new List<CategoryRejectionSummary>();
             int total = unlRecords?.Count ?? 0;
@@ -281,7 +230,7 @@ namespace CleanserBlazorUI.Services
                         {
                             if (string.IsNullOrWhiteSpace(e)) continue;
                             var trimmed = e.Trim();
-                            var targets = CategorizeMessage(trimmed);
+                            var targets = CategorizeMessage(trimmed, catalog);
                             foreach (var (cat, subcat) in targets)
                             {
                                 if (cat != topLevelCategory) continue;
@@ -358,7 +307,7 @@ namespace CleanserBlazorUI.Services
         }
 
         public static byte[] GenerateWorkbook<T>(
-            List<T> unlRecords, UnloadableLogHeader header, int duplicateCount = 0, int totalRecordsInFile = 0)
+            List<T> unlRecords, IReadOnlyList<UnloadableErrorCatalogEntry> catalog, UnloadableLogHeader header, int duplicateCount = 0, int totalRecordsInFile = 0)
         {
             using var workbook = new XLWorkbook();
             var ws = workbook.Worksheets.Add("Unloadable Log");
@@ -401,24 +350,126 @@ namespace CleanserBlazorUI.Services
 
             // ── Table 1: by exact error message ──────────────────────────────
             row = WriteMessageSection(ws, row, "2. Error Message Breakdown",
-                SummarizeByMessage(unlRecords, duplicateCount, totalRecordsInFile));
+                SummarizeByMessage(unlRecords, catalog, duplicateCount, totalRecordsInFile));
             row += 1;
 
             // ── Table 2: rolled up into categories ───────────────────────────
             row = WriteCategorySection(ws, row, "3. Demographic Information", "3.1 Rejections",
-                SummarizeByCategory(unlRecords, "Demographic"));
+                SummarizeByCategory(unlRecords, catalog, "Demographic"));
             row += 1;
             row = WriteCategorySection(ws, row, "4. Financial Information", "4.1 Rejections",
-                SummarizeByCategory(unlRecords, "Financial"));
+                SummarizeByCategory(unlRecords, catalog, "Financial"));
             row += 1;
             row = WriteCategorySection(ws, row, "5. Facility & Submission Information", "5.1 Rejections",
-                SummarizeByCategory(unlRecords, "FacilitySubmission", duplicateCount));
+                SummarizeByCategory(unlRecords, catalog, "FacilitySubmission", duplicateCount));
 
             ws.Columns().AdjustToContents();
 
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
             return stream.ToArray();
+        }
+
+        /// <summary>
+        /// Combined export for the Unloadable Log Report page -- unlike
+        /// GenerateWorkbook (one run per file), this covers an arbitrary,
+        /// already-filtered set of saved runs across many files/providers/
+        /// periods. Three sheets: one row per run, then the error-message and
+        /// category breakdowns flattened across all of them, each row tagged
+        /// with which run it came from (Filename/Data Provider/Period) since
+        /// there's no longer a single header these numbers belong to.
+        /// </summary>
+        public static byte[] GenerateCombinedWorkbook(List<UnloadableLogReportRow> rows)
+        {
+            using var workbook = new XLWorkbook();
+
+            var runsWs = workbook.Worksheets.Add("Runs");
+            string[] runCols =
+            {
+                "Filename", "Data Provider", "SubCode", "SubXDSCode", "Category", "Associate",
+                "Reporting Period", "Reporting Year", "DataType", "Number Of Records",
+                "Date Emailed", "Date Fixed", "Comments", "Created Date"
+            };
+            WriteHeaderRow(runsWs, runCols);
+            int runRow = 2;
+            foreach (var r in rows)
+            {
+                runsWs.Cell(runRow, 1).Value = r.Filename;
+                runsWs.Cell(runRow, 2).Value = r.DataProvider;
+                runsWs.Cell(runRow, 3).Value = r.SubCode;
+                runsWs.Cell(runRow, 4).Value = r.SubXDSCode;
+                runsWs.Cell(runRow, 5).Value = r.SubCategoryDescription;
+                runsWs.Cell(runRow, 6).Value = r.Associate;
+                runsWs.Cell(runRow, 7).Value = r.ReportingPeriod;
+                runsWs.Cell(runRow, 8).Value = r.ReportingYear;
+                runsWs.Cell(runRow, 9).Value = r.DataType;
+                runsWs.Cell(runRow, 10).Value = r.NumberOfRecords;
+                runsWs.Cell(runRow, 11).Value = r.DateEmailed;
+                runsWs.Cell(runRow, 12).Value = r.DateFixed;
+                runsWs.Cell(runRow, 13).Value = r.Comments;
+                runsWs.Cell(runRow, 14).Value = r.CreatedDate;
+                runRow++;
+            }
+            runsWs.Columns().AdjustToContents();
+
+            var messagesWs = workbook.Worksheets.Add("Error Message Breakdown");
+            string[] msgCols = { "Filename", "Data Provider", "Reporting Period", "Error Message", "Count", "Percentage", "Category" };
+            WriteHeaderRow(messagesWs, msgCols);
+            int msgRow = 2;
+            foreach (var r in rows)
+            {
+                foreach (var m in r.MessageDetails)
+                {
+                    messagesWs.Cell(msgRow, 1).Value = r.Filename;
+                    messagesWs.Cell(msgRow, 2).Value = r.DataProvider;
+                    messagesWs.Cell(msgRow, 3).Value = r.ReportingPeriod;
+                    messagesWs.Cell(msgRow, 4).Value = m.ErrorMessage;
+                    messagesWs.Cell(msgRow, 5).Value = m.Count;
+                    var pctCell = messagesWs.Cell(msgRow, 6);
+                    pctCell.Value = m.Percentage;
+                    pctCell.Style.NumberFormat.Format = "0.0%";
+                    messagesWs.Cell(msgRow, 7).Value = m.Category;
+                    msgRow++;
+                }
+            }
+            messagesWs.Columns().AdjustToContents();
+
+            var categoriesWs = workbook.Worksheets.Add("Category Breakdown");
+            string[] catCols = { "Filename", "Data Provider", "Reporting Period", "Top Level Category", "Sub Category", "Description Of Errors", "Volume Affected", "Percentage" };
+            WriteHeaderRow(categoriesWs, catCols);
+            int catRow = 2;
+            foreach (var r in rows)
+            {
+                foreach (var c in r.CategoryDetails)
+                {
+                    categoriesWs.Cell(catRow, 1).Value = r.Filename;
+                    categoriesWs.Cell(catRow, 2).Value = r.DataProvider;
+                    categoriesWs.Cell(catRow, 3).Value = r.ReportingPeriod;
+                    categoriesWs.Cell(catRow, 4).Value = c.TopLevelCategory;
+                    categoriesWs.Cell(catRow, 5).Value = c.SubCategory;
+                    categoriesWs.Cell(catRow, 6).Value = c.DescriptionOfErrors;
+                    categoriesWs.Cell(catRow, 7).Value = c.VolumeAffected;
+                    var catPctCell = categoriesWs.Cell(catRow, 8);
+                    catPctCell.Value = c.Percentage;
+                    catPctCell.Style.NumberFormat.Format = "0.0%";
+                    catRow++;
+                }
+            }
+            categoriesWs.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            return stream.ToArray();
+        }
+
+        private static void WriteHeaderRow(IXLWorksheet ws, string[] cols)
+        {
+            for (int c = 0; c < cols.Length; c++)
+            {
+                var cell = ws.Cell(1, c + 1);
+                cell.Value = cols[c];
+                cell.Style.Font.Bold = true;
+            }
         }
 
         private static int WriteMessageSection(IXLWorksheet ws, int row, string sectionTitle,

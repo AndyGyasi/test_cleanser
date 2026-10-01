@@ -13,6 +13,15 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<UnloadableLogHeader> UnloadableLogHeaders { get; set; }
     public DbSet<UnloadableLogMessageDetail> UnloadableLogMessageDetails { get; set; }
     public DbSet<UnloadableLogCategoryDetail> UnloadableLogCategoryDetails { get; set; }
+    public DbSet<UnloadableErrorCatalogEntry> UnloadableErrorCatalogEntries { get; set; }
+    public DbSet<DataLoggingGateMessages> DataLoggingGateMessages { get; set; }
+    public DbSet<DataLoggingUnloggedAttempt> DataLoggingUnloggedAttempts { get; set; }
+    public DbSet<DataLoggingAccessRequestReason> DataLoggingAccessRequestReasons { get; set; }
+    public DbSet<DataLoggingAccessRequest> DataLoggingAccessRequests { get; set; }
+    public DbSet<DataLoggingCleaningPurposeReason> DataLoggingCleaningPurposeReasons { get; set; }
+    public DbSet<DataLoggingCleaningPurposeLog> DataLoggingCleaningPurposeLogs { get; set; }
+    public DbSet<NavSection> NavSections { get; set; }
+    public DbSet<NavItem> NavItems { get; set; }
     // Moved from a separate, unmigrated "blazor-CleanserAppDB" database
     // (raw ADO.NET against [Subscriber].[Subscribers], no schema tracking)
     // into this EF-managed one. See GetShortCodeFromSubscribeIDAsync.
@@ -47,5 +56,21 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany(h => h.CategoryDetails)
             .HasForeignKey(d => d.UnloadableLogHeaderId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<ApplicationUser>()
+            .Property(u => u.ReceivedTransUserID)
+            .HasColumnType("varchar(4)")
+            .HasMaxLength(4);
+
+        // One tracked row per filename -- upserted, not one row per attempt.
+        builder.Entity<DataLoggingUnloggedAttempt>()
+            .HasIndex(a => a.Filename)
+            .IsUnique();
+
+        builder.Entity<NavItem>()
+            .HasOne(i => i.NavSection)
+            .WithMany(s => s.Items)
+            .HasForeignKey(i => i.NavSectionId)
+            .OnDelete(DeleteBehavior.Cascade); // deleting a section takes its items with it -- the management UI warns before that happens
     }
 }

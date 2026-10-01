@@ -1,0 +1,119 @@
+@page "/navigation-settings"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+@inject ISnackbar Snackbar
+
+@attribute [Authorize(Roles = "admin")]
+
+<MudText Typo="Typo.h5" Class="mb-2">Manage Sidebar</MudText>
+<MudText Typo="Typo.body2" Class="mb-4" Color="Color.Secondary">
+    Rename sections, or drag a page from one section into another. Changes apply to every user's sidebar
+    immediately (each user still only sees the pages their role allows).
+</MudText>
+
+<div class="d-flex align-center mb-4" style="gap: 8px;">
+    <MudTextField T="string" @bind-Value="newSectionTitle" Label="New section name" Style="max-width: 300px" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddSectionAsync">Add Section</MudButton>
+</div>
+
+@if (isLoading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudDropContainer T="CleanserBlazorUI.Entities.NavItem" Items="@allItems"
+                       ItemsSelector="@((item, dropzone) => item.NavSectionId.ToString() == dropzone)"
+                       ItemDropped="OnItemDropped" Class="d-flex flex-wrap" Style="gap: 16px;">
+        <ChildContent>
+            @foreach (var navSection in sections)
+            {
+                <MudPaper Class="pa-4" Outlined="true" Style="min-width: 280px; max-width: 320px;">
+                    <div class="d-flex align-center mb-2" style="gap: 8px;">
+                        <MudTextField T="string" Value="@navSection.Title" ValueChanged="@(v => RenameSectionAsync(navSection, v))"
+                                      Variant="Variant.Text" Margin="Margin.Dense" Class="flex-grow-1" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => DeleteSectionAsync(navSection))" />
+                    </div>
+                    <MudDropZone T="CleanserBlazorUI.Entities.NavItem" Identifier="@navSection.Id.ToString()"
+                                 Class="pa-2" Style="min-height: 120px; border: 1px dashed var(--mud-palette-lines-default); border-radius: 8px;" />
+                </MudPaper>
+            }
+        </ChildContent>
+        <ItemRenderer>
+            <MudPaper Class="pa-2 mb-2" Outlined="true" Style="cursor: grab;">
+                <MudText Typo="Typo.body2">@context.Label</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    /@context.Href
+                    @if (!string.IsNullOrWhiteSpace(context.RequiredRoles))
+                    {
+                        <text> · @context.RequiredRoles</text>
+                    }
+                </MudText>
+            </MudPaper>
+        </ItemRenderer>
+    </MudDropContainer>
+}
+
+@code {
+    bool isLoading = true;
+    List<NavSection> sections = new();
+    List<NavItem> allItems = new();
+    string newSectionTitle = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        isLoading = true;
+        sections = await DataManagementService.GetNavSectionsAsync();
+        allItems = sections.SelectMany(s => s.Items).ToList();
+        isLoading = false;
+    }
+
+    async Task OnItemDropped(MudItemDropInfo<NavItem> dropInfo)
+    {
+        if (dropInfo.Item == null) return;
+        if (!int.TryParse(dropInfo.DropzoneIdentifier, out var newSectionId)) return;
+        if (dropInfo.Item.NavSectionId == newSectionId) return;
+
+        await DataManagementService.MoveNavItemToSectionAsync(dropInfo.Item.Id, newSectionId);
+        dropInfo.Item.NavSectionId = newSectionId;
+    }
+
+    async Task RenameSectionAsync(NavSection section, string newTitle)
+    {
+        if (string.IsNullOrWhiteSpace(newTitle) || newTitle == section.Title) return;
+
+        section.Title = newTitle;
+        await DataManagementService.UpdateNavSectionTitleAsync(section.Id, newTitle);
+        Snackbar.Add("Section renamed.", MudBlazor.Severity.Success);
+    }
+
+    async Task AddSectionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newSectionTitle)) return;
+
+        await DataManagementService.AddNavSectionAsync(newSectionTitle.Trim());
+        newSectionTitle = string.Empty;
+        await LoadAsync();
+    }
+
+    async Task DeleteSectionAsync(NavSection section)
+    {
+        // allItems reflects live drag state (NavSectionId mutated in
+        // OnItemDropped), unlike section.Items which is the original load --
+        // check the former so a page just dragged out doesn't still block deletion.
+        if (allItems.Any(i => i.NavSectionId == section.Id))
+        {
+            Snackbar.Add($"Move \"{section.Title}\"'s pages to another section before deleting it.", MudBlazor.Severity.Warning);
+            return;
+        }
+
+        await DataManagementService.DeleteNavSectionAsync(section.Id);
+        await LoadAsync();
+    }
+}

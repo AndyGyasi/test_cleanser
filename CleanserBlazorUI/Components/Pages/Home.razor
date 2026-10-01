@@ -13,12 +13,38 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<Home> Logger
+@inject IDialogService DialogService
 
 
 @attribute [Authorize]
 <div>
-    <div style="width:100%; background: #001D23">
+    <div style="width:100%; background: var(--mud-palette-background);">
         <MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
+
+        @if (filesPendingAccessRequest.Count > 0)
+        {
+            <MudPaper Class="pa-4 mb-2" Outlined="true">
+                <MudText Typo="Typo.h6" Class="mb-2">Request Access</MudText>
+                <MudText Typo="Typo.body2" Class="mb-2">
+                    These files were skipped because they're assigned to someone else. Select which ones to
+                    request access for, choose a reason, and submit -- an admin will review your request.
+                </MudText>
+                @foreach (var f in filesPendingAccessRequest)
+                {
+                    <MudCheckBox T="bool" @bind-Value="f.Selected" Label="@($"{f.Filename} (assigned to {f.AssignedToEmail})")" />
+                }
+                <MudSelect T="int?" Label="Reason" @bind-Value="selectedAccessRequestReasonId" Class="mt-2" Style="max-width:400px">
+                    @foreach (var reason in accessRequestReasons)
+                    {
+                        <MudSelectItem T="int?" Value="@reason.Id">@reason.Reason</MudSelectItem>
+                    }
+                </MudSelect>
+                <div class="mt-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAccessRequestAsync">Submit Request</MudButton>
+                    <MudButton Class="ml-2" Variant="Variant.Text" OnClick="@(() => filesPendingAccessRequest.Clear())">Dismiss</MudButton>
+                </div>
+            </MudPaper>
+        }
         @* Indeterminate until the file's total row count is known (right at the
            start of reading it), then switches to a real percentage. *@
         <MudProgressLinear Indeterminate="@(currentFileTotalRows == 0)" Value="@CurrentFileProgressPercent" Color="Color.Primary" Buffer="true" Class="@progressIsVisible" Style="margin-top: 10px; margin-bottom: 0px;" />
@@ -33,20 +59,30 @@
             }
         </MudText>
         <style>
-            .format-pills { display:flex; gap:2px; background: var(--mud-palette-background-grey, #0F2225); border:1px solid var(--mud-palette-lines-default, #22383B); border-radius:8px; padding:3px; margin-bottom:14px; width: fit-content; }
-            .format-pill { font-size:13px; padding:9px 16px; border-radius:6px; border:none; background:transparent; color: var(--mud-palette-text-secondary, #93A29C); cursor:pointer; font-family: inherit; }
-            .format-pill.active { background: var(--mud-palette-primary, #1D9E75); color: #06231A; font-weight:600; }
+            .type-card { display:flex; flex-direction:column; gap:10px; width:150px; padding:14px; border-radius:8px; border:1px solid var(--mud-palette-lines-default); background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); cursor:pointer; font-family: inherit; text-align:left; transition: border-color 0.15s ease, background 0.15s ease; }
+            .type-card:hover { border-color: var(--mud-palette-primary); }
+            .type-card.active { border-color: var(--mud-palette-primary); background: color-mix(in srgb, var(--mud-palette-primary) 12%, var(--mud-palette-surface)); }
+            .type-card .type-card-top { display:flex; justify-content:space-between; align-items:center; }
+            .type-card .type-card-num { font-size:12px; color: var(--mud-palette-text-secondary); }
+            .type-card .type-card-code { font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; background: var(--mud-palette-primary); color: var(--mud-palette-primary-text); }
+            .type-card .type-card-title { font-size:13px; font-weight:500; line-height:1.3; }
         </style>
         @* Replaces the previous MudExpansionPanels accordion (4 panels, only one
-           open at a time) with a pill selector over one shared workspace below.
+           open at a time) with a selector over one shared workspace below.
            Reuses the exact same state (expandPanelSelectedOption) and the exact
            same reset-on-switch method (OnPanelExpandedChanged) the accordion
            already used -- no change to what happens when you switch formats,
            only how you pick one. *@
-        <div class="format-pills">
+        <div class="d-flex flex-wrap mb-4" style="gap: 10px;">
             @foreach (var item in TopExpandPanelsContent!)
             {
-                <button type="button" class="format-pill @(expandPanelSelectedOption == item.IdShortName ? "active" : "")" @onclick="() => OnPanelExpandedChanged(item.IdShortName)">@item.Title</button>
+                <button type="button" class="type-card @(expandPanelSelectedOption == item.IdShortName ? "active" : "")" @onclick="() => OnPanelExpandedChanged(item.IdShortName)">
+                    <div class="type-card-top">
+                        <span class="type-card-num">@item.Id.ToString("00")</span>
+                        <span class="type-card-code">@item.IdShortName.ToUpperInvariant()</span>
+                    </div>
+                    <span class="type-card-title">@item.Title</span>
+                </button>
             }
         </div>
         @foreach (var item in TopExpandPanelsContent!)
@@ -58,9 +94,9 @@
                             .dropzone {
                                 width: 100%;
                                 padding: 40px;
-                                border: 2px dashed #40953e; /* Blue accent */
-                                background-color: transparent; /* Dark background */
-                                color: #ccc; /* Light text */
+                                border: 2px dashed var(--mud-palette-lines-default);
+                                background-color: transparent;
+                                color: var(--mud-palette-text-secondary);
                                 text-align: center;
                                 cursor: pointer;
                                 transition: background-color 0.3s ease, border-color 0.3s ease;
@@ -72,14 +108,14 @@
                             }
 
                                 .dropzone:hover {
-                                    background-color: transparent; /* Slightly lighter on hover */
-                                    border-color: #40953e;
+                                    background-color: transparent;
+                                    border-color: var(--mud-palette-primary);
                                 }
 
                                 .dropzone.dragover {
-                                    background-color: #333; /* Subtle highlight */
-                                    border-color: #40953e; /* Bright blue highlight */
-                                    box-shadow: 0 0 10px rgba(0, 29, 35, 0.3);
+                                    background-color: var(--mud-palette-surface);
+                                    border-color: var(--mud-palette-primary);
+                                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
                                 }
 
                                 /* Hide the file input but keep it functional */
@@ -100,11 +136,11 @@
 
                                 .file-list li {
                                     padding: 8px;
-                                    background: #292929;
-                                    border: 1px solid #444;
+                                    background: var(--mud-palette-surface);
+                                    border: 1px solid var(--mud-palette-lines-default);
                                     border-radius: 4px;
                                     margin-bottom: 5px;
-                                    color: #ddd;
+                                    color: var(--mud-palette-text-primary);
                                 }
                         </style>
 
@@ -131,7 +167,7 @@
                             <div>@ErrorMessage</div>
                         }
                     </MudStack>
-                    <MudPaper Class="d-flex flex-row py-3 px-2" Elevation="24" Style="@($"color:{Colors.LightGreen.Accent3}; background:{Colors.BlueGray.Darken4};")">
+                    <MudPaper Class="d-flex flex-row py-3 px-2" Elevation="2" Style="color:var(--mud-palette-primary-text); background:var(--mud-palette-primary);">
                         <MudButtonGroup Color="Color.Primary" Variant="Variant.Text" DropShadow="true">
                             <MudButton OnClick="() => ToggleCleaningViewOrRefView(1)">CLEANING A FILE</MudButton>
                             <MudButton OnClick="() => ToggleCleaningViewOrRefView(2)">REFERENCE / REGISTER RECORDS</MudButton>
@@ -308,6 +344,23 @@
     int _unlLogSerialCounter = 0;
     MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;
     string AlertSeverityMessage;
+
+    // Data Logging access request UI state -- populated by RunCleanser's gate
+    // with files blocked for being assigned to someone else (never the "not
+    // logged at all" case, which has no request-access path at all).
+    public class PendingAccessRequestFile
+    {
+        public string Filename { get; set; } = string.Empty;
+        public string DataProvider { get; set; } = string.Empty;
+        public string? SubCode { get; set; }
+        public string? SubXDSCode { get; set; }
+        public string? SubCategoryCode { get; set; }
+        public string AssignedToEmail { get; set; } = string.Empty;
+        public bool Selected { get; set; } = true;
+    }
+    List<PendingAccessRequestFile> filesPendingAccessRequest = new();
+    List<DataLoggingAccessRequestReason> accessRequestReasons = new();
+    int? selectedAccessRequestReasonId;
     System.Timers.Timer _timer;
     TimeSpan _elapsedTime = TimeSpan.Zero;
     // Real wall-clock start time instead of accumulating a fixed increment per
@@ -483,9 +536,11 @@
             LogYear = _lastUnlLogYear
         };
 
+        var errorCatalog = await DataManagementService.GetUnloadableErrorCatalogAsync();
+
         byte[] logBytes = isBusiness
-            ? UnloadableLogService.GenerateWorkbook(_lastUnlBatchBus, header, _lastDuplicateCountBus, _lastTotalRecordsBus)
-            : UnloadableLogService.GenerateWorkbook(_lastUnlBatchInd, header, _lastDuplicateCountInd, _lastTotalRecordsInd);
+            ? UnloadableLogService.GenerateWorkbook(_lastUnlBatchBus, errorCatalog, header, _lastDuplicateCountBus, _lastTotalRecordsBus)
+            : UnloadableLogService.GenerateWorkbook(_lastUnlBatchInd, errorCatalog, header, _lastDuplicateCountInd, _lastTotalRecordsInd);
         string downloadName = $"UnloadableLog_{_lastUnlSubcode}_{_lastUnlReportingYear}{_lastUnlMonths}.xlsx";
         await JS.InvokeVoidAsync("downloadFile", downloadName, logBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
@@ -496,21 +551,21 @@
         try
         {
             var messageSummaries = isBusiness
-                ? UnloadableLogService.SummarizeByMessage(_lastUnlBatchBus, _lastDuplicateCountBus, _lastTotalRecordsBus)
-                : UnloadableLogService.SummarizeByMessage(_lastUnlBatchInd, _lastDuplicateCountInd, _lastTotalRecordsInd);
+                ? UnloadableLogService.SummarizeByMessage(_lastUnlBatchBus, errorCatalog, _lastDuplicateCountBus, _lastTotalRecordsBus)
+                : UnloadableLogService.SummarizeByMessage(_lastUnlBatchInd, errorCatalog, _lastDuplicateCountInd, _lastTotalRecordsInd);
 
             var categorySummaries = isBusiness
                 ? new List<(string, List<UnloadableLogService.CategoryRejectionSummary>)>
                 {
-                    ("Demographic", UnloadableLogService.SummarizeByCategory(_lastUnlBatchBus, "Demographic")),
-                    ("Financial", UnloadableLogService.SummarizeByCategory(_lastUnlBatchBus, "Financial")),
-                    ("FacilitySubmission", UnloadableLogService.SummarizeByCategory(_lastUnlBatchBus, "FacilitySubmission", _lastDuplicateCountBus))
+                    ("Demographic", UnloadableLogService.SummarizeByCategory(_lastUnlBatchBus, errorCatalog, "Demographic")),
+                    ("Financial", UnloadableLogService.SummarizeByCategory(_lastUnlBatchBus, errorCatalog, "Financial")),
+                    ("FacilitySubmission", UnloadableLogService.SummarizeByCategory(_lastUnlBatchBus, errorCatalog, "FacilitySubmission", _lastDuplicateCountBus))
                 }
                 : new List<(string, List<UnloadableLogService.CategoryRejectionSummary>)>
                 {
-                    ("Demographic", UnloadableLogService.SummarizeByCategory(_lastUnlBatchInd, "Demographic")),
-                    ("Financial", UnloadableLogService.SummarizeByCategory(_lastUnlBatchInd, "Financial")),
-                    ("FacilitySubmission", UnloadableLogService.SummarizeByCategory(_lastUnlBatchInd, "FacilitySubmission", _lastDuplicateCountInd))
+                    ("Demographic", UnloadableLogService.SummarizeByCategory(_lastUnlBatchInd, errorCatalog, "Demographic")),
+                    ("Financial", UnloadableLogService.SummarizeByCategory(_lastUnlBatchInd, errorCatalog, "Financial")),
+                    ("FacilitySubmission", UnloadableLogService.SummarizeByCategory(_lastUnlBatchInd, errorCatalog, "FacilitySubmission", _lastDuplicateCountInd))
                 };
 
             await DataManagementService.SaveUnloadableLogAsync(
@@ -3875,6 +3930,7 @@
                         _lastDuplicateCountInd = _duplicatesInd?.Count ?? 0;
                         _lastTotalRecordsInd = mainMatcherTransformer.Count + _lastDuplicateCountInd;
                         _lastUnlFilename = filename;
+                        await PopulateAssociateFromFilenameAsync(filename);
                         _lastUnlDataType = "IND";
                         _lastUnlSubcode = await DataManagementService.GetFileShortCodeFromFileName(filename);
 
@@ -4080,6 +4136,7 @@
                         _lastDuplicateCountInd = _duplicatesInd?.Count ?? 0;
                         _lastTotalRecordsInd = mainMatcherTransformer.Count + _lastDuplicateCountInd;
                         _lastUnlFilename = filename;
+                        await PopulateAssociateFromFilenameAsync(filename);
                         _lastUnlDataType = "IND";
                         _lastUnlSubcode = await DataManagementService.GetFileShortCodeFromFileName(filename);
 
@@ -4242,6 +4299,7 @@
                         _lastDuplicateCountBus = _duplicatesInd?.Count ?? 0;
                         _lastTotalRecordsBus = mainMatcherTransformer.Count + _lastDuplicateCountBus;
                         _lastUnlFilename = filename;
+                        await PopulateAssociateFromFilenameAsync(filename);
                         _lastUnlDataType = "BUS";
                         _lastUnlSubcode = await DataManagementService.GetFileShortCodeFromFileName(filename);
                         // false -- see the IND UNL label fix above; same bug, same reason.
@@ -4553,14 +4611,195 @@
         failedRecord.Clear();
         progressIsVisible = "d-block";
         var _spreadsheetFileAndChipColor = spreadsheetFileAndChipColor.Select(passed => passed.IsPassed).ToList();
+
+        // Data Logging gate: confirms the file was logged in
+        // Transact.ReceivedTrans, and (for non-admins) that the logged-in
+        // user is the true owner (assigned associate), before it's cleaned.
+        // Only applies when actually cleaning (Clean Only unchecked) -- a
+        // Clean-Only/preview run never saves anything, so there's nothing to
+        // protect. The "not logged at all" check always applies, admins
+        // included -- logging matters for every user. Admins are only
+        // exempt from the "assigned to someone else" check, since they
+        // aren't tied to any one associate's assignments. Checked once per
+        // file, batch keeps going past any blocked file (skip-and-continue).
+        string? currentUserReceivedTransId = null;
+        CleanserBlazorUI.Entities.DataLoggingGateMessages? gateMessages = null;
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var appUser = await UserManager.GetUserAsync(authState.User);
+        var isAdmin = appUser != null && await UserManager.IsInRoleAsync(appUser, "admin");
+
+        if (!CleanOnlyOrCleanAndReference)
+        {
+            currentUserReceivedTransId = appUser?.ReceivedTransUserID;
+            gateMessages = await DataManagementService.GetDataLoggingGateMessagesAsync();
+        }
+
+        filesPendingAccessRequest.Clear();
+        var blockedFileMessages = new List<string>();
+
+        // Classify every file first (no side effects -- no recording, no
+        // messages) so we know up front whether any file will actually be
+        // cleaned this run, before deciding whether to prompt for a
+        // cleaning purpose. WillClean mirrors the original per-file gate
+        // exactly: true owner, admin, or an approved access request.
+        var decisions = new List<(SpreadsheetFileAndChipColor Item, string Filename, bool WillClean, bool NotLogged, string? AssignedUserId)>();
         foreach (var item in spreadsheetFileAndChipColor)
         {
-            await GetSpreadsheetDataNew(item, id);
+            var thisFilename = item.SpreadsheetFile?.Name ?? string.Empty;
+            if (!CleanOnlyOrCleanAndReference)
+            {
+                var (found, assignedUserId) = await DataManagementService.GetFileAssignmentAsync(thisFilename);
+
+                if (!found)
+                {
+                    decisions.Add((item, thisFilename, false, true, null));
+                    continue;
+                }
+
+                var isOwnerMatch = string.Equals(assignedUserId, currentUserReceivedTransId, StringComparison.OrdinalIgnoreCase);
+                var hasApprovedAccess = !isOwnerMatch && !isAdmin && appUser != null &&
+                    await DataManagementService.HasApprovedAccessAsync(thisFilename, appUser.Email!);
+
+                decisions.Add((item, thisFilename, isOwnerMatch || isAdmin || hasApprovedAccess, false, assignedUserId));
+            }
+            else
+            {
+                decisions.Add((item, thisFilename, true, false, null));
+            }
+        }
+
+        // Prompt for cleaning purpose once, up front -- only when at least
+        // one file will actually be cleaned this run (a Clean-Only/preview
+        // run, or a batch that's entirely blocked, never reaches this).
+        string? cleaningPurpose = null;
+        if (!CleanOnlyOrCleanAndReference && decisions.Any(d => d.WillClean))
+        {
+            var cleaningPurposeReasons = await DataManagementService.GetCleaningPurposeReasonsAsync();
+            var dialogParams = new DialogParameters { ["Reasons"] = cleaningPurposeReasons };
+            var dialogRef = await DialogService.ShowAsync<CleanserBlazorUI.Components.Dialogs.CleaningPurposeDialog>("Cleaning Purpose", dialogParams);
+            var dialogResult = await dialogRef.Result;
+
+            if (dialogResult == null || dialogResult.Canceled)
+            {
+                _processing = false;
+                progressIsVisible = "d-none";
+                AlertSeverity = MudBlazor.Severity.Warning;
+                AlertSeverityMessage = "Cleaning cancelled -- no purpose selected.";
+                AlertSeverityVisible = "d-block";
+                return;
+            }
+
+            cleaningPurpose = dialogResult.Data as string;
+        }
+
+        foreach (var decision in decisions)
+        {
+            if (!CleanOnlyOrCleanAndReference)
+            {
+                if (decision.NotLogged)
+                {
+                    blockedFileMessages.Add(gateMessages!.NotLoggedMessageTemplate.Replace("{filename}", decision.Filename));
+                    await DataManagementService.RecordUnloggedFileAttemptAsync(decision.Filename, appUser?.Email ?? "unknown");
+                    continue;
+                }
+
+                if (!decision.WillClean)
+                {
+                    var assignedName = !string.IsNullOrWhiteSpace(decision.AssignedUserId)
+                        ? await DataManagementService.GetAssociateEmailForReceivedTransUserIdAsync(decision.AssignedUserId) ?? decision.AssignedUserId
+                        : "an unassigned user";
+                    blockedFileMessages.Add(gateMessages!.AssignedToOtherMessageTemplate
+                        .Replace("{filename}", decision.Filename)
+                        .Replace("{assignedName}", assignedName));
+
+                    var (dataProvider, subCode, subXDSCode, subCategoryCode) = await DataManagementService.GetDataProviderInfoForFilenameAsync(decision.Filename);
+                    filesPendingAccessRequest.Add(new PendingAccessRequestFile
+                    {
+                        Filename = decision.Filename,
+                        DataProvider = dataProvider,
+                        SubCode = subCode,
+                        SubXDSCode = subXDSCode,
+                        SubCategoryCode = subCategoryCode,
+                        AssignedToEmail = assignedName
+                    });
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(cleaningPurpose))
+                {
+                    await DataManagementService.RecordCleaningPurposeAsync(decision.Filename, appUser?.Email ?? "unknown", cleaningPurpose);
+                }
+            }
+
+            await GetSpreadsheetDataNew(decision.Item, id);
         }
         numberOfPassedCount = $"Passed Files ({passedRecord.Count})";
         numberOffailedCount = failedRecord.Count.ToString();
         progressIsVisible = "d-none";
         _processing = false;
+
+        if (blockedFileMessages.Count > 0)
+        {
+            AlertSeverity = MudBlazor.Severity.Warning;
+            AlertSeverityMessage = "Skipped (not assigned to you): " + string.Join(" | ", blockedFileMessages);
+            AlertSeverityVisible = "d-block";
+        }
+
+        if (filesPendingAccessRequest.Count > 0)
+        {
+            accessRequestReasons = await DataManagementService.GetAccessRequestReasonsAsync();
+        }
+    }
+
+    async Task SubmitAccessRequestAsync()
+    {
+        var selectedFiles = filesPendingAccessRequest.Where(f => f.Selected).ToList();
+        if (selectedFiles.Count == 0)
+        {
+            AlertSeverity = MudBlazor.Severity.Warning;
+            AlertSeverityMessage = "Select at least one file to request access for.";
+            AlertSeverityVisible = "d-block";
+            return;
+        }
+
+        var reason = accessRequestReasons.FirstOrDefault(r => r.Id == selectedAccessRequestReasonId)?.Reason;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            AlertSeverity = MudBlazor.Severity.Warning;
+            AlertSeverityMessage = "Select a reason before submitting.";
+            AlertSeverityVisible = "d-block";
+            return;
+        }
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var appUser = await UserManager.GetUserAsync(authState.User);
+
+        await DataManagementService.SubmitAccessRequestsAsync(
+            selectedFiles.Select(f => (f.Filename, f.DataProvider, f.SubCode, f.SubXDSCode, f.SubCategoryCode, f.AssignedToEmail)).ToList(),
+            appUser?.Email ?? "unknown", reason);
+
+        filesPendingAccessRequest.RemoveAll(f => f.Selected);
+        selectedAccessRequestReasonId = null;
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = $"Access request submitted for {selectedFiles.Count} file(s). An admin will review it.";
+        AlertSeverityVisible = "d-block";
+    }
+
+    // Derives the Unloadable Log's Associate column from Transact.ReceivedTrans
+    // (via the file's AssignTo) instead of requiring manual entry. Leaves
+    // UnlLogAssociate untouched if no match is found, so manual entry still
+    // works as a fallback.
+    async Task PopulateAssociateFromFilenameAsync(string filename)
+    {
+        var (found, assignedUserId) = await DataManagementService.GetFileAssignmentAsync(filename);
+        if (!found || string.IsNullOrWhiteSpace(assignedUserId)) return;
+
+        var associateName = await DataManagementService.GetAssociateEmailForReceivedTransUserIdAsync(assignedUserId);
+        if (!string.IsNullOrWhiteSpace(associateName))
+        {
+            UnlLogAssociate = associateName;
+        }
     }
     async Task DownloadExcelDataStream(byte[] excelData, string targetFilePath)
     {

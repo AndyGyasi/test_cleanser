@@ -13,6 +13,10 @@ namespace CleanserBlazorUI.Theme;
 // Neon-on-near-black reads as a generic/templated default; this keeps the
 // same "dark + green" identity while making it feel like a deliberate
 // choice for a credit bureau's data-operations tool.
+//
+// Both PaletteDark and PaletteLight are real, designed palettes (not one
+// real + one MudBlazor default) -- see MainLayout.razor for the toggle that
+// switches between them, persisted per-browser via localStorage.
 public static class CleanserTheme
 {
     public static readonly MudTheme Default = new()
@@ -46,9 +50,38 @@ public static class CleanserTheme
             TableLines = "#22383B",
             TableStriped = "#12262A",
         },
-        // Light palette kept as MudBlazor's default -- this app is built and
-        // used as a dark-first tool (IsDark defaults to true in MainLayout),
-        // so light mode is a fallback, not the primary identity to design.
+        // Same brand hues as PaletteDark (teal-emerald primary, cyan
+        // secondary) carried onto a clean off-white surface, so switching
+        // themes changes the backdrop, not the app's identity.
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#1C8A66",           // slightly deepened from PaletteDark's #1D9E75 for AA contrast on white
+            Secondary = "#1B8F86",         // deepened from #4FD1C5 for the same reason -- the dark palette's cyan is too pale to read on light backgrounds
+            Info = "#1B8F86",
+            Success = "#3F8F42",
+            Warning = "#B5790F",
+            Error = "#C2492F",
+
+            Background = "#F6F9F8",
+            Surface = "#FFFFFF",
+            AppbarBackground = "#FFFFFF",
+            AppbarText = "#1A2322",
+            DrawerBackground = "#FFFFFF",
+            DrawerText = "#1A2322",
+            DrawerIcon = "#5B6B67",
+
+            TextPrimary = "#1A2322",
+            TextSecondary = "#5B6B67",
+            TextDisabled = "#A8B5B1",
+
+            ActionDefault = "#5B6B67",
+            ActionDisabled = "#C7D1CE",
+
+            Divider = "#E2E8E6",
+            LinesDefault = "#E2E8E6",
+            TableLines = "#E2E8E6",
+            TableStriped = "#F2F6F5",
+        },
         Typography = new Typography
         {
             Default = new DefaultTypography { FontFamily = new[] { "Segoe UI", "system-ui", "sans-serif" } }

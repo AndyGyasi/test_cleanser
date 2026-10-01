@@ -17,76 +17,44 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 @inject ICustomEmailSender EmailSender
+@inject DataManagementService DataManagementService
 
 
 @attribute [Authorize(Roles = "admin, superuser")]
 @* @attribute [Authorize] *@
-<MudPaper Style="@($"min-height: 100vh; overflow: hidden; display: flex; background:{Colors.BlueGray.Darken4};")">
+<MudPaper Elevation="0" Style="min-height: 100vh; overflow: hidden; display: flex; background:var(--mud-palette-background);">
     <!-- Left Column -->
-    <div style="flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px;">
-        <div style="width: 55%; border-radius: 8px; padding: 20px;">
+    <MudPaper Elevation="0" Style="flex: 1; display: flex; justify-content: center; align-items: center; background:var(--mud-palette-background);">
+        <MudPaper Class="pa-8" Outlined="true" Style="width: 100%; max-width: 420px; border-radius: 12px;">
             <StatusMessage Message="@Message" />
             <EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
                 <DataAnnotationsValidator />
-                <MudText Typo="Typo.h4"><b>CREATE A NEW ACCOUNT</b></MudText>
-                <hr style="width: 535px" />
-                <div class="py-3 bg-transparent"></div>
+                <MudText Typo="Typo.h5" Class="mb-4"><b>Create a New Account</b></MudText>
                 <ValidationSummary class="text-danger" role="alert" />
 
-                <!-- Email Field -->
-                <div>
-                    <label>
-                        <InputText @bind-Value="Input.Email" class="form-control py-4" style="width: 535px" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                        <ValidationMessage For="() => Input.Email" class="text-danger" />
-                    </label>
-                </div>
-                <div class="py-2 bg-transparent"></div>
-                <div>
-                    <label>
-                        <InputText @bind-Value="Input.NewUserRoles" class="form-control py-4" style="width: 535px" autocomplete="role" aria-required="true" placeholder="admin, manager, superuser, user" />
-                        <ValidationMessage For="() => Input.NewUserRoles" class="text-danger" />
-                    </label>
-                </div>
-                <div class="py-2 bg-transparent"></div>
+                <MudTextField T="string" @bind-Value="Input.Email" For="@(() => Input.Email)" Label="Email"
+                              AutoComplete="username" Required="true" Class="mb-3" FullWidth="true" />
+                <MudTextField T="string" @bind-Value="Input.NewUserRoles" For="@(() => Input.NewUserRoles)" Label="Roles"
+                              Placeholder="admin, manager, superuser, user" Required="true" Class="mb-3" FullWidth="true" />
+                <MudTextField T="string" @bind-Value="Input.Password" For="@(() => Input.Password)" Label="Password"
+                              InputType="InputType.Password" AutoComplete="new-password" Required="true" Class="mb-3" FullWidth="true" />
+                <MudTextField T="string" @bind-Value="Input.ConfirmPassword" For="@(() => Input.ConfirmPassword)" Label="Confirm Password"
+                              InputType="InputType.Password" AutoComplete="new-password" Required="true" Class="mb-4" FullWidth="true" />
 
-                <!-- Password Field -->
-                <div>
-                    <label>
-                        <InputText type="password" @bind-Value="Input.Password" class="form-control py-4" style="width: 535px" autocomplete="new-password" aria-required="true" placeholder="password" />
-                        <ValidationMessage For="() => Input.Password" class="text-danger" />
-                    </label>
-                </div>
-                <div class="py-2 bg-transparent"></div>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mb-4">Register</MudButton>
 
-                <!-- Confirm Password Field -->
-                <div>
-                    <label>
-                        <InputText type="password" @bind-Value="Input.ConfirmPassword" class="form-control py-4" style="width: 535px" autocomplete="new-password" aria-required="true" placeholder="confirm password" />
-                        <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
-                    </label>
-                </div>
-
-                <div class="py-2 bg-transparent"></div>
-
-                <!-- Register Button -->
-                <button class="py-3 btn btn-primary" type="submit" style="width: 535px;">Register</button>
-                <div class="py-3 bg-transparent"></div>
-
-                <!-- Login Link -->
-                <div style="width: 100%; justify-items: center; justify-content:center">
-                    <p>
-                        <MudLink Color="Color.Primary" href="@(NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">
-                            Already have an account? Log in
-                        </MudLink>
-                    </p>
+                <div class="d-flex justify-center">
+                    <MudLink Color="Color.Primary" href="@(NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">
+                        Already have an account? Log in
+                    </MudLink>
                 </div>
             </EditForm>
-        </div>
-    </div>
+        </MudPaper>
+    </MudPaper>
 
     <!-- Right Column -->
-    <MudPaper Style="@($"color:{Colors.LightGreen.Accent3}; flex: 1; background-color: #f4f4f4; display: flex; justify-content: center; align-items: center background:{Colors.BlueGray.Darken4}; width: 100%;")">
-        <!-- Leave this empty for future content or image -->
+    <MudPaper Elevation="0" Style="flex: 1; background: var(--mud-palette-primary); width: 100%;" Class="d-none d-md-flex align-center justify-center">
+        <MudImage Src="logocolor.png" Width="220" />
     </MudPaper>
 </MudPaper>
 
@@ -123,6 +91,11 @@
         else
         {
             var getNewlycreateduser = await UserManager.FindByEmailAsync(_useremail);
+
+            // New users get ReceivedTransUserID auto-populated from Ring.Users
+            // (matched by email) -- legacy accounts are set manually instead.
+            await DataManagementService.AutoPopulateReceivedTransUserIdAsync(getNewlycreateduser.Id, _useremail);
+
             var roleResult = await UserManager.AddToRoleAsync(getNewlycreateduser, "MustChangePassword");
             if (roleResult.Succeeded)
             {

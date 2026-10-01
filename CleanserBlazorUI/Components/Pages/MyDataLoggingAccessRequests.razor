@@ -1,0 +1,53 @@
+@page "/my-access-requests"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+
+@attribute [Authorize]
+
+<MudText Typo="Typo.h5" Class="mb-4">My Access Requests</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Requests you've submitted to clean a file assigned to someone else, and their current status.
+</MudText>
+
+<MudDataGrid T="DataLoggingAccessRequest" Items="@requests" Loading="@isLoading"
+             Filterable="true" SortMode="SortMode.Multiple" Bordered="true" Striped="true" Dense="true">
+    <Columns>
+        <PropertyColumn Property="x => x.Filename" Title="Filename" />
+        <PropertyColumn Property="x => x.DataProvider" Title="Data Provider" />
+        <PropertyColumn Property="x => x.AssignedToEmail" Title="Assigned To" />
+        <PropertyColumn Property="x => x.Reason" Title="Reason" />
+        <PropertyColumn Property="x => x.RequestDate" Title="Requested">
+            <CellTemplate>@context.Item.RequestDate.ToString("dd MMM yyyy HH:mm")</CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Status" Title="Status" />
+        <PropertyColumn Property="x => x.ReviewedDate" Title="Reviewed">
+            <CellTemplate>@(context.Item.ReviewedDate?.ToString("dd MMM yyyy HH:mm") ?? "")</CellTemplate>
+        </PropertyColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="DataLoggingAccessRequest" PageSizeOptions="new[] { 25, 50, 100 }" />
+    </PagerContent>
+    <NoRecordsContent>
+        <MudText>You haven't submitted any access requests.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    bool isLoading;
+    List<DataLoggingAccessRequest> requests = new();
+
+    [CascadingParameter] private Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState>? AuthStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        var email = "unknown";
+        if (AuthStateTask != null)
+        {
+            var state = await AuthStateTask;
+            email = state.User.Identity?.Name ?? "unknown";
+        }
+        requests = await DataManagementService.GetAccessRequestsForUserAsync(email);
+        isLoading = false;
+    }
+}

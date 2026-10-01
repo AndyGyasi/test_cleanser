@@ -44,5 +44,3 @@ public class SubscribeContext
     public DateTime? EntryDate { get; set; }
     public string? UserID { get; set; }
 }
-
-

@@ -26,7 +26,7 @@
     padding: 8px 16px;
     }
 </style>
-<div Width="100%" Style="background-color:#000000;min-height:100%;overflow: hidden;">
+<div Width="100%" Style="background-color:var(--mud-palette-background);min-height:100%;overflow: hidden;">
 
     <div style="width:100%;">
         <MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
@@ -60,9 +60,9 @@
                             }
 
                             .dropzone.dragover {
-                            background-color: #333; /* Subtle highlight */
-                            border-color: #72b4ff; /* Bright blue highlight */
-                            box-shadow: 0 0 10px rgba(114, 180, 255, 0.3);
+                            background-color: var(--mud-palette-surface);
+                            border-color: var(--mud-palette-primary);
+                            box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
                             }
 
                             /* Hide the file input but keep it functional */
@@ -83,8 +83,8 @@
 
                             .file-list li {
                             padding: 8px;
-                            background: #292929;
-                            border: 1px solid #444;
+                            background: var(--mud-palette-surface);
+                            border: 1px solid var(--mud-palette-lines-default);
                             border-radius: 4px;
                             margin-bottom: 5px;
                             color: #ddd;
@@ -182,7 +182,7 @@
                             {
                                 foreach (var item in fullPastFilesPaths)
                                 {
-                                    <MudPaper Elevation="0" Class="my-2 py-y" Style="background-color: #36363F">
+                                    <MudPaper Elevation="0" Class="my-2 py-y" Style="background-color: var(--mud-palette-surface);">
                                         <MudButton Variant="Variant.Text" StartIcon="@Icons.Custom.FileFormats.FileDocument">@REF_GetFileNameFromFile(item)</MudButton>
                                         <MudDivider />
                                     </MudPaper>

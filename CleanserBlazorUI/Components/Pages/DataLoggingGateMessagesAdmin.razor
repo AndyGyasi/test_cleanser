@@ -1,0 +1,50 @@
+@page "/data-logging-gate-messages"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+
+@attribute [Authorize(Roles = "admin")]
+
+<MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
+
+<MudText Typo="Typo.h5" Class="mb-4">Data Logging Gate Messages</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Wording shown when the Data Logging gate blocks a file from being cleaned -- it confirms the file was logged in
+    Transact.ReceivedTrans and that the logged-in user is its true owner (assigned associate). Only applies when
+    Clean Only is unchecked. Use <code>{filename}</code> in either message, and <code>{assignedName}</code> in the
+    second one, as placeholders -- they're substituted with the real file name / associate at the moment the
+    message is shown.
+</MudText>
+
+@if (messages != null)
+{
+    <MudPaper Class="pa-4" Outlined="true">
+        <MudTextField @bind-Value="messages.NotLoggedMessageTemplate" Label="File not logged" Lines="2" Class="mb-4" />
+        <MudTextField @bind-Value="messages.AssignedToOtherMessageTemplate" Label="File assigned to someone else" Lines="2" Class="mb-4" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Save</MudButton>
+    </MudPaper>
+}
+
+@code {
+    private MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;
+    string AlertSeverityVisible = "d-none";
+    string AlertSeverityMessage = string.Empty;
+
+    CleanserBlazorUI.Entities.DataLoggingGateMessages? messages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        messages = await DataManagementService.GetDataLoggingGateMessagesAsync();
+    }
+
+    async Task SaveAsync()
+    {
+        if (messages == null) return;
+
+        await DataManagementService.UpdateDataLoggingGateMessagesAsync(
+            messages.NotLoggedMessageTemplate, messages.AssignedToOtherMessageTemplate);
+
+        AlertSeverity = MudBlazor.Severity.Success;
+        AlertSeverityMessage = "Saved.";
+        AlertSeverityVisible = "d-block";
+    }
+}

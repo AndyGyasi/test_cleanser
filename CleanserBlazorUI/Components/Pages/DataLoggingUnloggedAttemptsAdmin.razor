@@ -1,0 +1,53 @@
+@page "/data-logging-unlogged-attempts"
+@rendermode InteractiveServer
+@inject DataManagementService DataManagementService
+
+@attribute [Authorize(Roles = "admin")]
+
+<MudText Typo="Typo.h5" Class="mb-4">Files Not Yet Logged</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Files someone tried to run through Run Cleanser (Clean Only unchecked) that had no entry in
+    Transact.ReceivedTrans. There is no bypass or access-request path for this -- the file must be logged
+    there before it can be cleaned. One row per distinct filename, updated on every retry.
+</MudText>
+
+<MudDataGrid T="DataLoggingUnloggedAttempt" Items="@attempts" Loading="@isLoading"
+             Filterable="true" SortMode="SortMode.Multiple" Bordered="true" Striped="true" Dense="true">
+    <Columns>
+        <PropertyColumn Property="x => x.Filename" Title="Filename" />
+        <PropertyColumn Property="x => x.DataProvider" Title="Data Provider" />
+        <PropertyColumn Property="x => x.SubCode" Title="SubCode" />
+        <PropertyColumn Property="x => x.SubXDSCode" Title="SubXDSCode" />
+        <TemplateColumn Title="Category" Sortable="false" Filterable="false">
+            <CellTemplate>@(context.Item.SubCategoryCode != null && categoryLookup.TryGetValue(context.Item.SubCategoryCode, out var cat) ? cat : context.Item.SubCategoryCode)</CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.LastAttemptedByEmail" Title="Last Attempted By" />
+        <PropertyColumn Property="x => x.AttemptCount" Title="Attempts" />
+        <PropertyColumn Property="x => x.FirstAttemptedDate" Title="First Attempted">
+            <CellTemplate>@context.Item.FirstAttemptedDate.ToString("dd MMM yyyy HH:mm")</CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.LastAttemptedDate" Title="Last Attempted">
+            <CellTemplate>@context.Item.LastAttemptedDate.ToString("dd MMM yyyy HH:mm")</CellTemplate>
+        </PropertyColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="DataLoggingUnloggedAttempt" PageSizeOptions="new[] { 25, 50, 100 }" />
+    </PagerContent>
+    <NoRecordsContent>
+        <MudText>No blocked attempts recorded.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    bool isLoading;
+    List<DataLoggingUnloggedAttempt> attempts = new();
+    Dictionary<string, string> categoryLookup = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        attempts = await DataManagementService.GetUnloggedFileAttemptsAsync();
+        categoryLookup = await DataManagementService.GetSubscriberCategoryLookupAsync();
+        isLoading = false;
+    }
+}

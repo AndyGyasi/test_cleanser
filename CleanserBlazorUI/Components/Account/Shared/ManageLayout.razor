@@ -1,14 +1,15 @@
 ﻿@inherits LayoutComponentBase
 @layout AccountLayout
 
-<MudPaper Style="min-height: 100vh; overflow: hidden; background-color:#001D23; width: 100%; justify-content:center;" Elevation="25">
-    <hr />
-    <div>
-        <div class="col-md-3">
+<MudGrid Spacing="4">
+    <MudItem xs="12" sm="4" md="3">
+        <MudPaper Class="pa-2" Outlined="true">
             <ManageNavMenu />
-        </div>
-        <div style="min-height:100%;overflow: hidden; background-color:#001D23; width: 100%;">
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="8" md="9">
+        <MudPaper Class="pa-6" Outlined="true">
             @Body
-        </div>
-    </div>
-</MudPaper>
+        </MudPaper>
+    </MudItem>
+</MudGrid>

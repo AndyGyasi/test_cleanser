@@ -8,57 +8,37 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<MudPaper Elevation="0" Style="@($"min-height: 100vh; overflow: hidden; display: flex; background:{Colors.BlueGray.Darken4};")">
+<MudPaper Elevation="0" Style="min-height: 100vh; overflow: hidden; display: flex; background:var(--mud-palette-background);">
     <!-- Left Column -->
-    <MudPaper Style="@($"flex: 1; display: flex; justify-content: center; align-items: center;width: 100%; background:{Colors.BlueGray.Darken4};")">
-        <div style="width: 55%; border-radius: 8px; padding: 20px;">
+    <MudPaper Elevation="0" Style="flex: 1; display: flex; justify-content: center; align-items: center; width: 100%; background:var(--mud-palette-background);">
+        <MudPaper Class="pa-8" Outlined="true" Style="width: 100%; max-width: 420px; border-radius: 12px;">
             <StatusMessage Message="@errorMessage" />
             <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
                 <DataAnnotationsValidator />
-                <MudText Typo="Typo.h5"><b>Welcome back! 👏</b></MudText>
-                <hr style="width: 535px" />
-                <div class="py-3 bg-transparent"></div>
+                <MudText Typo="Typo.h5" Class="mb-4"><b>Welcome back! 👏</b></MudText>
                 <ValidationSummary class="text-danger" role="alert" />
-                <div>
-                    <label>
-                        <InputText @bind-Value="Input.Email" class="form-control py-4" style="width: 535px" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                    </label>
-                    <ValidationMessage For="() => Input.Email" class="text-danger" />
-                </div>
-                <div class="py-2 bg-transparent"></div>
-                <div>
-                    <label>
-                        <InputText type="password" @bind-Value="Input.Password" class="form-control py-4" style="width: 535px" autocomplete="current-password" aria-required="true" placeholder="password" />
-                        <ValidationMessage For="() => Input.Password" class="text-danger" />
-                    </label>
-                </div>
-                <div class="checkbox mb-3">
-                    <label class="form-label">
-                        <InputCheckbox @bind-Value="Input.RememberMe" class="darker-border-checkbox form-check-input" />
-                        Remember me
-                    </label>
-                </div>
-                <!-- Updated button styling -->
-                <button type="submit" class="btn btn-primary py-3" style="width: 535px">Log in</button>
-                <div class="py-3 bg-transparent"></div>
-                <div style="width: 100%; justify-items: center; justify-content:center">
-                    <p>
-                        <MudLink href="Account/ForgotPassword">
-                            Forgot your password?
-                        </MudLink>
-                     @*    <MudLink Color="Color.Primary" href="Account/ResendEmailConfirmation">
-                            Resend email confirmation
-                        </MudLink> *@
-                    </p>
+
+                <MudTextField T="string" @bind-Value="Input.Email" For="@(() => Input.Email)" Label="Email"
+                              AutoComplete="username" Required="true" Class="mb-3" FullWidth="true" />
+                <MudTextField T="string" @bind-Value="Input.Password" For="@(() => Input.Password)" Label="Password"
+                              InputType="InputType.Password" AutoComplete="current-password" Required="true" Class="mb-3" FullWidth="true" />
+                <MudCheckBox T="bool" @bind-Value="Input.RememberMe" Label="Remember me" Class="mb-3" />
+
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mb-4">Log in</MudButton>
+
+                <div class="d-flex justify-center">
+                    <MudLink href="Account/ForgotPassword">Forgot your password?</MudLink>
                 </div>
             </EditForm>
-        </div>
+        </MudPaper>
     </MudPaper>
 
     <!-- Right Column -->
-    <MudPaper style="flex: 1; background-color: #FFFFFF; background: #FFFFFF; width: 100%;"></MudPaper>
+    <MudPaper Elevation="0" Style="flex: 1; background: var(--mud-palette-primary); width: 100%;" Class="d-none d-md-flex align-center justify-center">
+        <MudImage Src="logocolor.png" Width="220" />
+    </MudPaper>
 </MudPaper>
-@* 
+@*
 <MudPaper Elevation="0" Style="@($"min-height: 100vh; overflow: hidden; display: flex; background:{Colors.BlueGray.Darken4};")">
     <!-- Left Column -->
     <MudPaper Style="@($"flex: 1; display: flex; justify-content: center; align-items: center;width: 100%; background:{Colors.BlueGray.Darken4};")">

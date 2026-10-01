@@ -7,9 +7,11 @@ public class DataManagementService
 {
     private string text_value_seperator { get; set; } = "&&&___&&&";
     private readonly ApplicationDbContext _context;
-    public DataManagementService(ApplicationDbContext context)
+    private readonly XdsDataLogDbContext _xdsDataLogDbContext;
+    public DataManagementService(ApplicationDbContext context, XdsDataLogDbContext xdsDataLogDbContext)
     {
         _context = context;
+        _xdsDataLogDbContext = xdsDataLogDbContext;
     }
     // Returns all reference records for this subscriber.
     // The reference always holds the cumulative known state — every unique
@@ -1156,6 +1158,571 @@ public class DataManagementService
         return await _context.SubscriberProfiles.OrderBy(p => p.SubscriberName).ToListAsync();
     }
 
+    // Looks up which associate a given uploaded filename was logged/assigned
+    // to, via XDSDataLogDB's Transact.ReceivedTrans. Found=false means the
+    // file isn't logged there at all; Found=true with a null/empty AssignTo
+    // means it's logged but unassigned.
+    public async Task<(bool Found, string? AssignTo)> GetFileAssignmentAsync(string filename)
+    {
+        var row = await _xdsDataLogDbContext.ReceivedTrans
+            .Where(r => r.RenamedFile == filename)
+            .Select(r => new { r.AssignTo })
+            .FirstOrDefaultAsync();
+
+        return row == null ? (false, null) : (true, row.AssignTo);
+    }
+
+    // Resolves a Ring.Users/Transact.ReceivedTrans.AssignTo value (stored on
+    // ApplicationUser.ReceivedTransUserID) to that associate's email, for
+    // display (e.g. "this file is assigned to X") or for the Unloadable Log's
+    // Associate column.
+    public async Task<string?> GetAssociateEmailForReceivedTransUserIdAsync(string receivedTransUserId)
+    {
+        if (string.IsNullOrWhiteSpace(receivedTransUserId)) return null;
+
+        return await _context.Users
+            .Where(u => u.ReceivedTransUserID == receivedTransUserId)
+            .Select(u => u.Email)
+            .FirstOrDefaultAsync();
+    }
+
+    // Auto-populates ReceivedTransUserID for a newly-registered account by
+    // matching its email against Ring.Users.Email. Returns the matched
+    // Ring.Users.UserID, or null if no Ring.Users row matched that email
+    // (the column is then left for manual entry, same as a legacy account).
+    public async Task<string?> AutoPopulateReceivedTransUserIdAsync(string applicationUserId, string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return null;
+
+        var matchedUserId = await _xdsDataLogDbContext.RingUsers
+            .Where(r => r.Email == email)
+            .Select(r => r.UserID)
+            .FirstOrDefaultAsync();
+
+        if (string.IsNullOrWhiteSpace(matchedUserId)) return null;
+
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == applicationUserId);
+        if (user == null) return null;
+
+        user.ReceivedTransUserID = matchedUserId;
+        await _context.SaveChangesAsync();
+        return matchedUserId;
+    }
+
+    public async Task<DataLoggingGateMessages> GetDataLoggingGateMessagesAsync()
+    {
+        return await _context.DataLoggingGateMessages.FirstAsync(m => m.Id == 1);
+    }
+
+    public async Task UpdateDataLoggingGateMessagesAsync(string notLoggedMessageTemplate, string assignedToOtherMessageTemplate)
+    {
+        var existing = await _context.DataLoggingGateMessages.FirstAsync(m => m.Id == 1);
+        existing.NotLoggedMessageTemplate = notLoggedMessageTemplate;
+        existing.AssignedToOtherMessageTemplate = assignedToOtherMessageTemplate;
+        await _context.SaveChangesAsync();
+    }
+
+    // Records that someone tried to run a file with no Transact.ReceivedTrans
+    // entry through Run Cleanser -- there's no bypass for this (that's what
+    // Clean Only is for), so this exists purely for admin visibility into
+    // which files are still waiting to be logged. Upserted per filename so
+    // repeated retries on the same file update one row instead of piling up.
+    public async Task RecordUnloggedFileAttemptAsync(string filename, string attemptedByEmail)
+    {
+        var existing = await _context.DataLoggingUnloggedAttempts.FirstOrDefaultAsync(a => a.Filename == filename);
+        var now = DateTime.Now;
+        var (dataProvider, subCode, subXDSCode, subCategoryCode) = await GetDataProviderInfoForFilenameAsync(filename);
+
+        if (existing == null)
+        {
+            _context.DataLoggingUnloggedAttempts.Add(new DataLoggingUnloggedAttempt
+            {
+                Filename = filename,
+                LastAttemptedByEmail = attemptedByEmail,
+                FirstAttemptedDate = now,
+                LastAttemptedDate = now,
+                AttemptCount = 1,
+                DataProvider = dataProvider,
+                SubCode = subCode,
+                SubXDSCode = subXDSCode,
+                SubCategoryCode = subCategoryCode
+            });
+        }
+        else
+        {
+            existing.LastAttemptedByEmail = attemptedByEmail;
+            existing.LastAttemptedDate = now;
+            existing.AttemptCount += 1;
+            existing.DataProvider = dataProvider;
+            existing.SubCode = subCode;
+            existing.SubXDSCode = subXDSCode;
+            existing.SubCategoryCode = subCategoryCode;
+        }
+
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<DataLoggingUnloggedAttempt>> GetUnloggedFileAttemptsAsync()
+    {
+        return await _context.DataLoggingUnloggedAttempts
+            .OrderByDescending(a => a.LastAttemptedDate)
+            .ToListAsync();
+    }
+
+    // Resolves a filename to its Data Provider display name plus SubCode/
+    // SubXDSCode/SubCategoryCode, via the same short-code extraction used
+    // everywhere else (GetFileShortCodeFromFileName) against the real
+    // Subscriber.Subscribers table in XDSDataLogDB (same connection as
+    // Transact.ReceivedTrans/Ring.Users -- see XdsDataLogDbContext).
+    // DataProvider falls back to the short code itself if there's no
+    // matching subscriber row, so callers never end up with a blank display
+    // name; the codes stay null in that case since there's nothing to spool.
+    // Both codes are kept rather than just one: SubCode is what
+    // Transact.ReceivedTrans itself keys off (so joining straight back to it
+    // is direct), while SubXDSCode is the cross-system identifier needed for
+    // a future additional server/database that won't have SubCode.
+    public async Task<(string DataProvider, string? SubCode, string? SubXDSCode, string? SubCategoryCode)> GetDataProviderInfoForFilenameAsync(string filename)
+    {
+        var shortCode = await GetFileShortCodeFromFileName(filename);
+        var row = await _xdsDataLogDbContext.Subscribers
+            .Where(s => s.ShortName == shortCode)
+            .Select(s => new { s.SubName, s.SubCode, s.SubXDSCode, s.SubCategoryCode })
+            .FirstOrDefaultAsync();
+
+        var dataProvider = !string.IsNullOrWhiteSpace(row?.SubName) ? row!.SubName! : shortCode;
+        return (dataProvider, row?.SubCode, row?.SubXDSCode, row?.SubCategoryCode);
+    }
+
+    // SubCategoryCode -> description (e.g. "09" -> "Others"), from the real
+    // Subscriber.SubscriberCategory table in XDSDataLogDB. Used to resolve
+    // the raw code stored on DataLoggingAccessRequest/DataLoggingUnloggedAttempt
+    // into something readable on an admin grid. Loaded whole and joined
+    // in-memory by callers rather than queried per row.
+    public async Task<Dictionary<string, string>> GetSubscriberCategoryLookupAsync()
+    {
+        return await _xdsDataLogDbContext.SubscriberCategories
+            .Where(c => c.SubCategoryCode != null)
+            .ToDictionaryAsync(c => c.SubCategoryCode!, c => c.CatDescription ?? string.Empty);
+    }
+
+    // Full Data Provider list for dropdowns -- real Subscriber.Subscribers in
+    // XDSDataLogDB, joined in-memory with Subscriber.SubscriberCategory so
+    // each option can show its category description alongside the name.
+    public async Task<List<DataProviderOption>> GetAllDataProvidersAsync()
+    {
+        var categoryLookup = await GetSubscriberCategoryLookupAsync();
+        var subscribers = await _xdsDataLogDbContext.Subscribers
+            .Where(s => s.ShortName != null)
+            .OrderBy(s => s.SubName)
+            .ToListAsync();
+
+        return subscribers.Select(s => new DataProviderOption
+        {
+            ShortName = s.ShortName!,
+            SubName = s.SubName ?? string.Empty,
+            CategoryDescription = !string.IsNullOrWhiteSpace(s.SubCategoryCode) && categoryLookup.TryGetValue(s.SubCategoryCode, out var desc)
+                ? desc
+                : null
+        }).ToList();
+    }
+
+    // Every UnloadableLogHeader the caller is allowed to see, enriched with
+    // its Data Provider identity (resolved fresh from Subscriber.Subscribers
+    // via the filename's short code -- UnloadableLogHeader's own
+    // SubscriberProfile link is the local, legacy table and carries no
+    // category). Admin sees every row; a regular user sees only rows whose
+    // filename is currently assigned to them in Transact.ReceivedTrans --
+    // the same check RunCleanser's gate uses, reused here for visibility.
+    // Loads everything into memory in one pass rather than re-querying per
+    // filter change -- the report page filters/aggregates this same list
+    // client-side as the user adjusts filters, so charts update instantly.
+    // The set of filenames currently assigned to a user in Transact.ReceivedTrans
+    // -- shared by GetUnloadableLogReportDataAsync and GetUnloadableRecordsCountAsync
+    // so both apply the exact same visibility rule.
+    private async Task<HashSet<string>> GetAssignedFilenamesAsync(string receivedTransUserId)
+    {
+        var assignedFilenames = await _xdsDataLogDbContext.ReceivedTrans
+            .Where(r => r.AssignTo == receivedTransUserId && r.RenamedFile != null)
+            .Select(r => r.RenamedFile!)
+            .ToListAsync();
+        return new HashSet<string>(assignedFilenames, StringComparer.OrdinalIgnoreCase);
+    }
+
+    // Lightweight count for the sidebar's "Unloadable log" badge -- same
+    // visibility rule as GetUnloadableLogReportDataAsync, but without
+    // loading MessageDetails/CategoryDetails, since all this needs is a sum.
+    public async Task<int> GetUnloadableRecordsCountAsync(bool isAdmin, string? currentUserReceivedTransId)
+    {
+        var headers = await _context.UnloadableLogHeaders
+            .Select(h => new { h.Filename, h.NumberOfRecords })
+            .ToListAsync();
+
+        if (isAdmin) return headers.Sum(h => h.NumberOfRecords);
+
+        if (string.IsNullOrWhiteSpace(currentUserReceivedTransId)) return 0;
+
+        var assignedSet = await GetAssignedFilenamesAsync(currentUserReceivedTransId);
+        return headers.Where(h => assignedSet.Contains(h.Filename)).Sum(h => h.NumberOfRecords);
+    }
+
+    // ── Dynamic sidebar navigation ──────────────────────────────────────────
+    public async Task<List<NavSection>> GetNavSectionsAsync()
+    {
+        return await _context.NavSections
+            .Include(s => s.Items)
+            .OrderBy(s => s.DisplayOrder)
+            .ToListAsync();
+    }
+
+    public async Task UpdateNavSectionTitleAsync(int sectionId, string title)
+    {
+        var section = await _context.NavSections.FirstOrDefaultAsync(s => s.Id == sectionId);
+        if (section == null) return;
+
+        section.Title = title;
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<NavSection> AddNavSectionAsync(string title)
+    {
+        var maxOrder = await _context.NavSections.MaxAsync(s => (int?)s.DisplayOrder) ?? 0;
+        var section = new NavSection { Title = title, DisplayOrder = maxOrder + 1 };
+        _context.NavSections.Add(section);
+        await _context.SaveChangesAsync();
+        return section;
+    }
+
+    // Cascades to the section's items (see OnModelCreating) -- the admin UI
+    // confirms with the user before calling this, since it's not reversible.
+    public async Task DeleteNavSectionAsync(int sectionId)
+    {
+        var section = await _context.NavSections.FirstOrDefaultAsync(s => s.Id == sectionId);
+        if (section == null) return;
+
+        _context.NavSections.Remove(section);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task AddNavItemAsync(int sectionId, string label, string href, string? iconKey, string? requiredRoles)
+    {
+        var maxOrder = await _context.NavItems
+            .Where(i => i.NavSectionId == sectionId)
+            .MaxAsync(i => (int?)i.DisplayOrder) ?? 0;
+
+        _context.NavItems.Add(new NavItem
+        {
+            NavSectionId = sectionId,
+            Label = label,
+            Href = href,
+            IconKey = iconKey,
+            RequiredRoles = requiredRoles,
+            DisplayOrder = maxOrder + 1
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateNavItemAsync(int itemId, string label, string href, string? iconKey, string? requiredRoles)
+    {
+        var item = await _context.NavItems.FirstOrDefaultAsync(i => i.Id == itemId);
+        if (item == null) return;
+
+        item.Label = label;
+        item.Href = href;
+        item.IconKey = iconKey;
+        item.RequiredRoles = requiredRoles;
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteNavItemAsync(int itemId)
+    {
+        var item = await _context.NavItems.FirstOrDefaultAsync(i => i.Id == itemId);
+        if (item == null) return;
+
+        _context.NavItems.Remove(item);
+        await _context.SaveChangesAsync();
+    }
+
+    // Drag-and-drop reassignment: moves an item to a (possibly different)
+    // section, placed last within it.
+    public async Task MoveNavItemToSectionAsync(int itemId, int newSectionId)
+    {
+        var item = await _context.NavItems.FirstOrDefaultAsync(i => i.Id == itemId);
+        if (item == null) return;
+
+        var maxOrder = await _context.NavItems
+            .Where(i => i.NavSectionId == newSectionId)
+            .MaxAsync(i => (int?)i.DisplayOrder) ?? 0;
+
+        item.NavSectionId = newSectionId;
+        item.DisplayOrder = maxOrder + 1;
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<UnloadableLogReportRow>> GetUnloadableLogReportDataAsync(bool isAdmin, string? currentUserReceivedTransId)
+    {
+        var headers = await _context.UnloadableLogHeaders
+            .Include(h => h.MessageDetails)
+            .Include(h => h.CategoryDetails)
+            .ToListAsync();
+
+        if (!isAdmin)
+        {
+            if (string.IsNullOrWhiteSpace(currentUserReceivedTransId))
+            {
+                return new List<UnloadableLogReportRow>();
+            }
+
+            var assignedSet = await GetAssignedFilenamesAsync(currentUserReceivedTransId);
+            headers = headers.Where(h => assignedSet.Contains(h.Filename)).ToList();
+        }
+
+        // Resolve every header's short code once, then batch-query
+        // Subscriber.Subscribers for all of them in a single round trip
+        // instead of one query per header.
+        var shortCodeByHeaderId = new Dictionary<int, string>();
+        foreach (var h in headers)
+        {
+            shortCodeByHeaderId[h.Id] = await GetFileShortCodeFromFileName(h.Filename);
+        }
+
+        var distinctShortCodes = shortCodeByHeaderId.Values.Distinct().ToList();
+        var subscriberRows = await _xdsDataLogDbContext.Subscribers
+            .Where(s => s.ShortName != null && distinctShortCodes.Contains(s.ShortName))
+            .ToListAsync();
+        var subscribersByShortCode = subscriberRows
+            .Where(s => s.ShortName != null)
+            .GroupBy(s => s.ShortName!)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var categoryLookup = await GetSubscriberCategoryLookupAsync();
+
+        var result = new List<UnloadableLogReportRow>();
+        foreach (var h in headers)
+        {
+            var shortCode = shortCodeByHeaderId[h.Id];
+            subscribersByShortCode.TryGetValue(shortCode, out var subscriber);
+            var categoryDescription = !string.IsNullOrWhiteSpace(subscriber?.SubCategoryCode) &&
+                categoryLookup.TryGetValue(subscriber.SubCategoryCode, out var desc) ? desc : null;
+
+            result.Add(new UnloadableLogReportRow
+            {
+                HeaderId = h.Id,
+                Filename = h.Filename,
+                DataProvider = !string.IsNullOrWhiteSpace(subscriber?.SubName) ? subscriber!.SubName! : shortCode,
+                SubCode = subscriber?.SubCode,
+                SubXDSCode = subscriber?.SubXDSCode,
+                SubCategoryCode = subscriber?.SubCategoryCode,
+                SubCategoryDescription = categoryDescription,
+                Associate = h.Associate,
+                NumberOfRecords = h.NumberOfRecords,
+                ReportingPeriod = h.ReportingPeriod,
+                ReportingYear = h.ReportingYear,
+                DataType = h.DataType,
+                Months = h.Months,
+                LogYear = h.LogYear,
+                DateEmailed = h.DateEmailed,
+                DateFixed = h.DateFixed,
+                Comments = h.Comments,
+                CreatedDate = h.CreatedDate,
+                MessageDetails = h.MessageDetails,
+                CategoryDetails = h.CategoryDetails
+            });
+        }
+
+        return result;
+    }
+
+    public async Task<List<DataLoggingAccessRequestReason>> GetAccessRequestReasonsAsync()
+    {
+        return await _context.DataLoggingAccessRequestReasons.OrderBy(r => r.Reason).ToListAsync();
+    }
+
+    public async Task AddAccessRequestReasonAsync(string reason)
+    {
+        _context.DataLoggingAccessRequestReasons.Add(new DataLoggingAccessRequestReason { Reason = reason });
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateAccessRequestReasonAsync(int id, string reason)
+    {
+        var existing = await _context.DataLoggingAccessRequestReasons.FirstOrDefaultAsync(r => r.Id == id);
+        if (existing == null) return;
+
+        existing.Reason = reason;
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteAccessRequestReasonAsync(int id)
+    {
+        var existing = await _context.DataLoggingAccessRequestReasons.FirstOrDefaultAsync(r => r.Id == id);
+        if (existing == null) return;
+
+        _context.DataLoggingAccessRequestReasons.Remove(existing);
+        await _context.SaveChangesAsync();
+    }
+
+    // One row per selected file, all sharing the reason/requester/timestamp --
+    // covers the batch-cleaning case where several blocked files are
+    // requested together in one submission.
+    public async Task SubmitAccessRequestsAsync(
+        List<(string Filename, string DataProvider, string? SubCode, string? SubXDSCode, string? SubCategoryCode, string AssignedToEmail)> files,
+        string requestedByEmail, string reason)
+    {
+        var now = DateTime.Now;
+        foreach (var file in files)
+        {
+            _context.DataLoggingAccessRequests.Add(new DataLoggingAccessRequest
+            {
+                Filename = file.Filename,
+                DataProvider = file.DataProvider,
+                SubCode = file.SubCode,
+                SubXDSCode = file.SubXDSCode,
+                SubCategoryCode = file.SubCategoryCode,
+                RequestedByEmail = requestedByEmail,
+                AssignedToEmail = file.AssignedToEmail,
+                Reason = reason,
+                RequestDate = now,
+                Status = DataLoggingAccessRequestStatus.Pending
+            });
+        }
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<DataLoggingAccessRequest>> GetAllAccessRequestsAsync()
+    {
+        return await _context.DataLoggingAccessRequests
+            .OrderByDescending(r => r.RequestDate)
+            .ToListAsync();
+    }
+
+    public async Task<List<DataLoggingAccessRequest>> GetAccessRequestsForUserAsync(string requestedByEmail)
+    {
+        return await _context.DataLoggingAccessRequests
+            .Where(r => r.RequestedByEmail == requestedByEmail)
+            .OrderByDescending(r => r.RequestDate)
+            .ToListAsync();
+    }
+
+    public async Task ReviewAccessRequestAsync(int requestId, bool approve, string reviewedByEmail)
+    {
+        var existing = await _context.DataLoggingAccessRequests.FirstOrDefaultAsync(r => r.Id == requestId);
+        if (existing == null) return;
+
+        existing.Status = approve ? DataLoggingAccessRequestStatus.Approved : DataLoggingAccessRequestStatus.Denied;
+        existing.ReviewedByEmail = reviewedByEmail;
+        existing.ReviewedDate = DateTime.Now;
+        await _context.SaveChangesAsync();
+    }
+
+    // Gate check: has this user got a standing approval to clean this
+    // specific file despite it being assigned to someone else? Checked fresh
+    // on every Run Cleanser attempt, not cached -- admin can still see/revoke
+    // by denying a previously-approved request if needed.
+    public async Task<bool> HasApprovedAccessAsync(string filename, string requestedByEmail)
+    {
+        return await _context.DataLoggingAccessRequests.AnyAsync(r =>
+            r.Filename == filename &&
+            r.RequestedByEmail == requestedByEmail &&
+            r.Status == DataLoggingAccessRequestStatus.Approved);
+    }
+
+    public async Task<List<DataLoggingCleaningPurposeReason>> GetCleaningPurposeReasonsAsync()
+    {
+        return await _context.DataLoggingCleaningPurposeReasons.OrderBy(r => r.Reason).ToListAsync();
+    }
+
+    public async Task AddCleaningPurposeReasonAsync(string reason)
+    {
+        _context.DataLoggingCleaningPurposeReasons.Add(new DataLoggingCleaningPurposeReason { Reason = reason });
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateCleaningPurposeReasonAsync(int id, string reason)
+    {
+        var existing = await _context.DataLoggingCleaningPurposeReasons.FirstOrDefaultAsync(r => r.Id == id);
+        if (existing == null) return;
+
+        existing.Reason = reason;
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteCleaningPurposeReasonAsync(int id)
+    {
+        var existing = await _context.DataLoggingCleaningPurposeReasons.FirstOrDefaultAsync(r => r.Id == id);
+        if (existing == null) return;
+
+        _context.DataLoggingCleaningPurposeReasons.Remove(existing);
+        await _context.SaveChangesAsync();
+    }
+
+    // Records which purpose was selected for a file that actually proceeded
+    // to cleaning (owner match, admin, or approved access -- never a blocked
+    // file). Purely for admin visibility; nothing reads this back.
+    public async Task RecordCleaningPurposeAsync(string filename, string performedByEmail, string purpose)
+    {
+        var (dataProvider, subCode, subXDSCode, subCategoryCode) = await GetDataProviderInfoForFilenameAsync(filename);
+
+        _context.DataLoggingCleaningPurposeLogs.Add(new DataLoggingCleaningPurposeLog
+        {
+            Filename = filename,
+            DataProvider = dataProvider,
+            SubCode = subCode,
+            SubXDSCode = subXDSCode,
+            SubCategoryCode = subCategoryCode,
+            PerformedByEmail = performedByEmail,
+            Purpose = purpose,
+            PerformedDate = DateTime.Now
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<DataLoggingCleaningPurposeLog>> GetCleaningPurposeLogAsync()
+    {
+        return await _context.DataLoggingCleaningPurposeLogs
+            .OrderByDescending(l => l.PerformedDate)
+            .ToListAsync();
+    }
+
+    public async Task<List<UnloadableErrorCatalogEntry>> GetUnloadableErrorCatalogAsync()
+    {
+        return await _context.UnloadableErrorCatalogEntries
+            .OrderBy(e => e.TopLevelCategory).ThenBy(e => e.SubCategory)
+            .ToListAsync();
+    }
+
+    public async Task AddUnloadableErrorCatalogEntryAsync(string topLevelCategory, string subCategory, string descriptionOfErrors)
+    {
+        _context.UnloadableErrorCatalogEntries.Add(new UnloadableErrorCatalogEntry
+        {
+            TopLevelCategory = topLevelCategory,
+            SubCategory = subCategory,
+            DescriptionOfErrors = descriptionOfErrors,
+            LastUpdatedDate = DateTime.Now
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateUnloadableErrorCatalogEntryAsync(int id, string topLevelCategory, string subCategory, string descriptionOfErrors)
+    {
+        var existing = await _context.UnloadableErrorCatalogEntries.FirstOrDefaultAsync(e => e.Id == id);
+        if (existing == null) return;
+
+        existing.TopLevelCategory = topLevelCategory;
+        existing.SubCategory = subCategory;
+        existing.DescriptionOfErrors = descriptionOfErrors;
+        existing.LastUpdatedDate = DateTime.Now;
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteUnloadableErrorCatalogEntryAsync(int id)
+    {
+        var existing = await _context.UnloadableErrorCatalogEntries.FirstOrDefaultAsync(e => e.Id == id);
+        if (existing == null) return;
+
+        _context.UnloadableErrorCatalogEntries.Remove(existing);
+        await _context.SaveChangesAsync();
+    }
+
     public async Task<List<string>> GetUnloadableLogYearsAsync()
     {
         return await _context.UnloadableLogHeaders
@@ -1332,20 +1899,32 @@ public class DataManagementService
     // For fixing a record nobody's file ever conflicted against but that's
     // still known to be wrong (e.g. reported by a subscriber).
 
-    public async Task<List<IndividualRef>> SearchIndividualRefAsync(string subscriberCode, string customerId) =>
-        await _context.IndividualsData
-            .Where(r => r.SubscriberCode == subscriberCode && r.CustomerID == customerId)
-            .ToListAsync();
+    // CustomerID and accountNo are each optional, but at least one of the two
+    // is expected by the caller -- whichever is supplied narrows the search;
+    // supplying both narrows by both (AND), not either/or.
+    public async Task<List<IndividualRef>> SearchIndividualRefAsync(string subscriberCode, string? customerId, string? accountNo = null)
+    {
+        var query = _context.IndividualsData.Where(r => r.SubscriberCode == subscriberCode);
+        if (!string.IsNullOrWhiteSpace(customerId)) query = query.Where(r => r.CustomerID == customerId);
+        if (!string.IsNullOrWhiteSpace(accountNo)) query = query.Where(r => r.CreditFacilityAccNum == accountNo);
+        return await query.ToListAsync();
+    }
 
-    public async Task<List<IndividualMobileRef>> SearchIndividualMobileRefAsync(string subscriberCode, string customerId) =>
-        await _context.IndividualsMobileData
-            .Where(r => r.SubscriberCode == subscriberCode && r.CustomerID == customerId)
-            .ToListAsync();
+    public async Task<List<IndividualMobileRef>> SearchIndividualMobileRefAsync(string subscriberCode, string? customerId, string? accountNo = null)
+    {
+        var query = _context.IndividualsMobileData.Where(r => r.SubscriberCode == subscriberCode);
+        if (!string.IsNullOrWhiteSpace(customerId)) query = query.Where(r => r.CustomerID == customerId);
+        if (!string.IsNullOrWhiteSpace(accountNo)) query = query.Where(r => r.CreditFacilityAccNum == accountNo);
+        return await query.ToListAsync();
+    }
 
-    public async Task<List<BusinessRef>> SearchBusinessRefAsync(string subscriberCode, string customerId) =>
-        await _context.BusinessesData
-            .Where(r => r.SubscriberCode == subscriberCode && r.CustomerID == customerId)
-            .ToListAsync();
+    public async Task<List<BusinessRef>> SearchBusinessRefAsync(string subscriberCode, string? customerId, string? accountNo = null)
+    {
+        var query = _context.BusinessesData.Where(r => r.SubscriberCode == subscriberCode);
+        if (!string.IsNullOrWhiteSpace(customerId)) query = query.Where(r => r.CustomerID == customerId);
+        if (!string.IsNullOrWhiteSpace(accountNo)) query = query.Where(r => r.CreditFacilityAccNum == accountNo);
+        return await query.ToListAsync();
+    }
 
     public async Task UpdateIndividualRefIdentityAsync(int id, string dob, string natId, string votersId,
         string driverLic, string passport, string ssNum, string ezwich, string otherId)
