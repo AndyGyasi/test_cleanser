@@ -1209,14 +1209,18 @@ public class DataManagementService
         return matchedUserId;
     }
 
+    // This table holds exactly one settings row (seeded once in SeedData,
+    // never multiplied elsewhere) -- fetched by position, not by a pinned Id,
+    // since the identity value it lands on after seeding isn't guaranteed to
+    // be 1 (e.g. if the row is ever manually deleted and reseeded).
     public async Task<DataLoggingGateMessages> GetDataLoggingGateMessagesAsync()
     {
-        return await _context.DataLoggingGateMessages.FirstAsync(m => m.Id == 1);
+        return await _context.DataLoggingGateMessages.FirstAsync();
     }
 
     public async Task UpdateDataLoggingGateMessagesAsync(string notLoggedMessageTemplate, string assignedToOtherMessageTemplate)
     {
-        var existing = await _context.DataLoggingGateMessages.FirstAsync(m => m.Id == 1);
+        var existing = await _context.DataLoggingGateMessages.FirstAsync();
         existing.NotLoggedMessageTemplate = notLoggedMessageTemplate;
         existing.AssignedToOtherMessageTemplate = assignedToOtherMessageTemplate;
         await _context.SaveChangesAsync();

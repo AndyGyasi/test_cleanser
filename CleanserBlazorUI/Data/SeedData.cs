@@ -123,7 +123,7 @@ public class SeedData
     {
         if (await context.DataLoggingGateMessages.AnyAsync()) return;
 
-        context.DataLoggingGateMessages.Add(new DataLoggingGateMessages { Id = 1 });
+        context.DataLoggingGateMessages.Add(new DataLoggingGateMessages());
         await context.SaveChangesAsync();
     }
 
