@@ -15,7 +15,7 @@
     <DataAnnotationsValidator />
     <ValidationSummary class="text-danger" role="alert" />
     <MudTextField T="string?" Value="@username" Label="Username" ReadOnly="true" Disabled="true" Class="mb-3" Style="max-width: 420px" />
-    <MudTextField T="string?" @bind-Value="Input.PhoneNumber" For="@(() => Input.PhoneNumber)" Label="Phone number" Class="mb-4" Style="max-width: 420px" />
+    <div class="login-field" style="max-width: 420px"><label for="fld-phonenumber">Phone number</label><InputText id="fld-phonenumber" @bind-Value="Input.PhoneNumber" type="text" /><ValidationMessage For="() => Input.PhoneNumber" class="text-danger" /></div>
     <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
 </EditForm>
 @code {
@@ -27,7 +27,8 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get => _input ??= new(); set => _input = value; }
+    private InputModel? _input;
 
     protected override async Task OnInitializedAsync()
     {

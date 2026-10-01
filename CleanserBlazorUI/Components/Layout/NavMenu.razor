@@ -2,8 +2,9 @@
    footer all live here, inside MainLayout's MudDrawer. Sections and items
    are loaded from the database (NavSection/NavItem) rather than hardcoded,
    so admin can rename sections and drag pages between them from
-   /navigation-settings without a code change. A section renders only if at
-   least one of its items is visible to the current user's role. *@
+   /navigation-settings without a code change. Each section is its own
+   collapsible MudNavGroup, and renders only if at least one of its items is
+   visible to the current user's role. *@
 @inject DataManagementService DataManagementService
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -11,33 +12,43 @@
 
 <div class="d-flex flex-column" style="height: 100%;">
     <div class="pa-4">
-        <MudImage Src="logocolor.png" Height="40" />
+        <MudImage Src="logocolor.png" Height="36" />
     </div>
 
-    <MudNavMenu Class="flex-grow-1" style="overflow-y: auto;">
+    <div class="px-4 pb-2">
+        <MudTextField T="string" @bind-Value="searchText" Placeholder="Search menu" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true" Class="mud-width-full" />
+    </div>
+
+    <MudNavMenu Class="flex-grow-1 px-2" style="overflow-y: auto;">
         @foreach (var navSection in sections)
         {
-            var visibleItems = navSection.Items.Where(IsVisible).OrderBy(i => i.DisplayOrder).ToList();
+            var visibleItems = navSection.Items
+                .Where(IsVisible)
+                .Where(MatchesSearch)
+                .OrderBy(i => i.DisplayOrder)
+                .ToList();
+
             if (visibleItems.Count > 0)
             {
-                <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-3">@navSection.Title</MudText>
-                @foreach (var item in visibleItems)
-                {
-                    <MudNavLink Href="@item.Href" Match="@(item.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" Icon="@ResolveIcon(item.IconKey)">
-                        @item.Label
-                        @if (item.Href == "unloadable-log-report" && unloadableCount > 0)
-                        {
-                            <MudBadge Content="@unloadableCount" Color="Color.Primary" Overlap="false" Class="ml-2" />
-                        }
-                    </MudNavLink>
-                }
+                <MudNavGroup Title="@navSection.Title" Expanded="@IsExpanded(navSection.Id)"
+                             ExpandedChanged="@(v => expandedState[navSection.Id] = v)">
+                    @foreach (var item in visibleItems)
+                    {
+                        <MudNavLink Href="@item.Href" Match="@(item.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" Icon="@ResolveIcon(item.IconKey)">
+                            @item.Label
+                        </MudNavLink>
+                    }
+                </MudNavGroup>
             }
         }
 
         <AuthorizeView Roles="admin">
             <Authorized>
-                <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-3">Admin</MudText>
-                <MudNavLink Href="navigation-settings" Icon="@Icons.Material.Filled.Tune">Manage Sidebar</MudNavLink>
+                <MudNavGroup Title="Admin" Expanded="@IsExpanded(-1)" ExpandedChanged="@(v => expandedState[-1] = v)">
+                    <MudNavLink Href="navigation-settings" Icon="@Icons.Material.Filled.Tune">Manage Sidebar</MudNavLink>
+                </MudNavGroup>
             </Authorized>
         </AuthorizeView>
     </MudNavMenu>
@@ -50,15 +61,16 @@
                 <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-2">@Initial</MudAvatar>
                 <div class="flex-grow-1" style="min-width: 0;">
                     <MudText Typo="Typo.body2" Class="text-truncate">@context.User.Identity?.Name</MudText>
-                    <div class="d-flex align-center" style="gap: 8px;">
-                        <MudLink Href="Account/Manage" Typo="Typo.caption">Profile</MudLink>
-                        <form action="Account/Logout" method="post">
-                            <AntiforgeryToken />
-                            <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                            <button type="submit" style="background:none;border:none;padding:0;cursor:pointer;" class="mud-typography-caption mud-primary-text">Log out</button>
-                        </form>
-                    </div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate">@primaryRoleLabel</MudText>
                 </div>
+            </div>
+            <div class="d-flex align-center px-4 pb-4" style="gap: 8px;">
+                <MudLink Href="Account/Manage" Typo="Typo.caption">Profile</MudLink>
+                <form action="Account/Logout" method="post">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                    <button type="submit" style="background:none;border:none;padding:0;cursor:pointer;" class="mud-typography-caption mud-primary-text">Log out</button>
+                </form>
             </div>
         </Authorized>
         <NotAuthorized>
@@ -101,9 +113,16 @@
 
     List<NavSection> sections = new();
     HashSet<string> currentUserRoles = new();
-    int unloadableCount;
     string? currentUrl;
     string Initial = "?";
+    string primaryRoleLabel = "User";
+    string searchText = "";
+
+    // Expanded/collapsed state per section (keyed by NavSection.Id, -1 for the
+    // built-in Admin group) -- defaults to expanded so nothing looks hidden
+    // on first load, same as the reference design.
+    readonly Dictionary<int, bool> expandedState = new();
+    bool IsExpanded(int sectionId) => !expandedState.TryGetValue(sectionId, out var expanded) || expanded;
 
     protected override async Task OnInitializedAsync()
     {
@@ -120,8 +139,12 @@
             {
                 currentUserRoles = new HashSet<string>(await UserManager.GetRolesAsync(appUser), StringComparer.OrdinalIgnoreCase);
             }
-            var isAdmin = currentUserRoles.Contains("admin");
-            unloadableCount = await DataManagementService.GetUnloadableRecordsCountAsync(isAdmin, appUser?.ReceivedTransUserID);
+
+            var primaryRole = currentUserRoles.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(primaryRole))
+            {
+                primaryRoleLabel = char.ToUpperInvariant(primaryRole[0]) + primaryRole[1..];
+            }
         }
 
         sections = await DataManagementService.GetNavSectionsAsync();
@@ -136,4 +159,7 @@
         var required = item.RequiredRoles.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         return required.Any(r => currentUserRoles.Contains(r));
     }
+
+    bool MatchesSearch(NavItem item) =>
+        string.IsNullOrWhiteSpace(searchText) || item.Label.Contains(searchText, StringComparison.OrdinalIgnoreCase);
 }

@@ -47,8 +47,7 @@ else
             </MudText>
             <EditForm Model="Input" FormName="send-code" OnValidSubmit="OnValidSubmitAsync" method="post">
                 <DataAnnotationsValidator />
-                <MudTextField T="string" @bind-Value="Input.Code" For="@(() => Input.Code)" Label="Verification Code"
-                              AutoComplete="off" Class="mb-3" Style="max-width: 420px" />
+                <div class="login-field" style="max-width: 420px"><label for="fld-code">Verification Code</label><InputText id="fld-code" @bind-Value="Input.Code" type="text" autocomplete="off" /><ValidationMessage For="() => Input.Code" class="text-danger" /></div>
                 <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Verify</MudButton>
                 <ValidationSummary class="text-danger" role="alert" />
             </EditForm>
@@ -69,7 +68,8 @@ else
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get => _input ??= new(); set => _input = value; }
+    private InputModel? _input;
 
     protected override async Task OnInitializedAsync()
     {

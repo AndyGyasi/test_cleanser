@@ -35,8 +35,7 @@
         </MudButton>
     }
 
-    <MudTextField T="string?" @bind-Value="Input.NewEmail" For="@(() => Input.NewEmail)" Label="New email"
-                  AutoComplete="email" Required="true" Class="mb-4" Style="max-width: 420px" />
+    <div class="login-field" style="max-width: 420px"><label for="fld-newemail">New email</label><InputText id="fld-newemail" @bind-Value="Input.NewEmail" type="text" autocomplete="email" /><ValidationMessage For="() => Input.NewEmail" class="text-danger" /></div>
     <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Change email</MudButton>
 </EditForm>
 
@@ -50,7 +49,8 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm(FormName = "change-email")]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get => _input ??= new(); set => _input = value; }
+    private InputModel? _input;
 
     protected override async Task OnInitializedAsync()
     {

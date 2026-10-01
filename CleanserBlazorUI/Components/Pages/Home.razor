@@ -19,6 +19,8 @@
 @attribute [Authorize]
 <div>
     <div style="width:100%; background: var(--mud-palette-background);">
+        <MudText Typo="Typo.caption" Color="Color.Secondary">Data cleaning</MudText>
+        <MudText Typo="Typo.h4" Class="mb-4"><b>Upload and clean a file</b></MudText>
         <MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
 
         @if (filesPendingAccessRequest.Count > 0)

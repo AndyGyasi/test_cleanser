@@ -25,8 +25,7 @@
     <ValidationSummary class="text-danger" role="alert" />
     @if (requirePassword)
     {
-        <MudTextField T="string" @bind-Value="Input.Password" For="@(() => Input.Password)" Label="Password"
-                      InputType="InputType.Password" AutoComplete="current-password" Required="true" Class="mb-4" Style="max-width: 420px" />
+        <div class="login-field" style="max-width: 420px"><label for="fld-password">Password</label><InputText id="fld-password" @bind-Value="Input.Password" type="password" autocomplete="current-password" /><ValidationMessage For="() => Input.Password" class="text-danger" /></div>
     }
     <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Error">Delete data and close my account</MudButton>
 </EditForm>
@@ -40,7 +39,8 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get => _input ??= new(); set => _input = value; }
+    private InputModel? _input;
 
     protected override async Task OnInitializedAsync()
     {

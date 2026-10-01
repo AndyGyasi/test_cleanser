@@ -58,3 +58,18 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+/* Native (name-emitting) inputs for statically rendered Account forms */
+    .login-field { margin-bottom: 16px; }
+    .login-field label { display: block; font-size: .875rem; margin-bottom: 4px; }
+    .login-field input[type=email], .login-field input[type=password], .login-field input[type=text] {
+        width: 100%; padding: 12px 14px; font-size: 1rem; border-radius: 6px;
+        color: var(--mud-palette-text-primary); background: transparent;
+        border: 1px solid var(--mud-palette-lines-inputs);
+    }
+    .login-field input:focus { outline: none; border-color: var(--mud-palette-primary); box-shadow: 0 0 0 1px var(--mud-palette-primary); }
+    .login-check { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; cursor: pointer; }
+    .login-submit {
+        width: 100%; padding: 12px; font-size: 1rem; font-weight: 500; cursor: pointer; border: 0; border-radius: 6px;
+        color: var(--mud-palette-primary-text); background: var(--mud-palette-primary);
+    }
+    .login-submit:hover { filter: brightness(1.1); }

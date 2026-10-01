@@ -1,96 +1,120 @@
-﻿@page "/Account/Login"
+@page "/Account/Login"
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
 @using CleanserBlazorUI.Data
+@using CleanserBlazorUI.Services
 @inject SignInManager<ApplicationUser> SignInManager
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<MudPaper Elevation="0" Style="min-height: 100vh; overflow: hidden; display: flex; background:var(--mud-palette-background);">
-    <!-- Left Column -->
-    <MudPaper Elevation="0" Style="flex: 1; display: flex; justify-content: center; align-items: center; width: 100%; background:var(--mud-palette-background);">
-        <MudPaper Class="pa-8" Outlined="true" Style="width: 100%; max-width: 420px; border-radius: 12px;">
-            <StatusMessage Message="@errorMessage" />
-            <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
-                <DataAnnotationsValidator />
-                <MudText Typo="Typo.h5" Class="mb-4"><b>Welcome back! 👏</b></MudText>
-                <ValidationSummary class="text-danger" role="alert" />
+<div style="min-height: 100vh; display: flex; background: var(--mud-palette-background);">
+    <!-- Left column: brand / pitch -->
+    <div class="d-none d-md-flex flex-column justify-space-between pa-12" style="flex: 1; max-width: 560px;">
+        <MudImage Src="logocolor.png" Height="40" />
 
-                <MudTextField T="string" @bind-Value="Input.Email" For="@(() => Input.Email)" Label="Email"
-                              AutoComplete="username" Required="true" Class="mb-3" FullWidth="true" />
-                <MudTextField T="string" @bind-Value="Input.Password" For="@(() => Input.Password)" Label="Password"
-                              InputType="InputType.Password" AutoComplete="current-password" Required="true" Class="mb-3" FullWidth="true" />
-                <MudCheckBox T="bool" @bind-Value="Input.RememberMe" Label="Remember me" Class="mb-3" />
+        <div>
+            <div class="d-inline-flex align-center pa-1 px-3 mb-6" style="gap: 6px; border-radius: 20px; background: var(--mud-palette-success-hover); border: 1px solid var(--mud-palette-success);">
+                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Success" Style="font-size: 8px;" />
+                <MudText Typo="Typo.caption" Color="Color.Success"><b>Cleanser</b></MudText>
+            </div>
 
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mb-4">Log in</MudButton>
+            <MudText Typo="Typo.h3" Class="mb-4"><b>Clean credit data with confidence.</b></MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-8">
+                Upload files and catch errors before they reach the bureau database.
+            </MudText>
 
-                <div class="d-flex justify-center">
-                    <MudLink href="Account/ForgotPassword">Forgot your password?</MudLink>
+            <MudPaper Outlined="true" Class="pa-6" Style="border-radius: 12px;">
+                <div class="d-flex justify-space-between align-center mb-4">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="letter-spacing: 1px;"><b>SUPPORTED DATA TYPES</b></MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">7</MudText>
                 </div>
-            </EditForm>
-        </MudPaper>
-    </MudPaper>
-
-    <!-- Right Column -->
-    <MudPaper Elevation="0" Style="flex: 1; background: var(--mud-palette-primary); width: 100%;" Class="d-none d-md-flex align-center justify-center">
-        <MudImage Src="logocolor.png" Width="220" />
-    </MudPaper>
-</MudPaper>
-@*
-<MudPaper Elevation="0" Style="@($"min-height: 100vh; overflow: hidden; display: flex; background:{Colors.BlueGray.Darken4};")">
-    <!-- Left Column -->
-    <MudPaper Style="@($"flex: 1; display: flex; justify-content: center; align-items: center;width: 100%; background:{Colors.BlueGray.Darken4};")">
-        <div style="width: 55%; border-radius: 8px; padding: 20px;">
-            <StatusMessage Message="@errorMessage" />
-            <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
-                <DataAnnotationsValidator />
-                <MudText Typo="Typo.h4"><b>Welcome back! 👏</b></MudText>
-                <hr style="width: 535px" />
-                <div class="py-3 bg-transparent"></div>
-                <ValidationSummary class="text-danger" role="alert" />
-                <div>
-                    <label>
-                        <InputText @bind-Value="Input.Email" class="form-control py-4" style="width: 535px" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                    </label>
-                    <ValidationMessage For="() => Input.Email" class="text-danger" />
+                <div class="d-flex mb-4" style="gap: 8px; flex-wrap: wrap;">
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">IND</MudChip>
+                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small">BUS</MudChip>
+                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small">DUD</MudChip>
+                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small">JUD</MudChip>
+                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small">MOBILE</MudChip>
                 </div>
-                <div class="py-2 bg-transparent"></div>
-                <div>
-                    <label>
-                        <InputText type="password" @bind-Value="Input.Password" class="form-control py-4" style="width: 535px" autocomplete="current-password" aria-required="true" placeholder="password" />
-                        <ValidationMessage For="() => Input.Password" class="text-danger" />
-                    </label>
-                </div>
-                <div class="checkbox mb-3">
-                    <label class="form-label">
-                        <InputCheckbox @bind-Value="Input.RememberMe" class="darker-border-checkbox form-check-input" />
-                        Remember me
-                    </label>
-                </div>
-                <button type="submit" class="w-100 btn btn-primary">Log in</button>
-                <div class="py-3 bg-transparent"></div>
-                <div style="width: 100%; justify-items: center; justify-content:center">
-                    <p>
-                        <MudLink href="Account/ForgotPassword">
-                            Forgot your password?
-                        </MudLink>
-                        <MudLink Color="Color.Primary" href="Account/ResendEmailConfirmation">
-                            Resend email confirmation
-                        </MudLink>
-                    </p>
-                </div>
-            </EditForm>
+                @foreach (var line in new[]
+                {
+                    "Duplicate and DOB checks on every file",
+                    "Matching against the reference register",
+                    "An unloadable log you can filter and export"
+                })
+                {
+                    <div class="d-flex align-center mb-1" style="gap: 8px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" />
+                        <MudText Typo="Typo.body2">@line</MudText>
+                    </div>
+                }
+            </MudPaper>
         </div>
-    </MudPaper>
 
-    <!-- Right Column -->
-    <MudPaper style="flex: 1; background-color: #FFFFFF; background: #FFFFFF; width: 100%;"></MudPaper>
-</MudPaper> *@
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            © @DateTime.Now.Year.ToString() XDS Data Ghana. All rights reserved.
+        </MudText>
+    </div>
+
+    <!-- Right column: sign-in form -->
+    <div class="d-flex flex-column" style="flex: 1; position: relative;">
+        <div class="d-flex justify-end pa-6">
+            <MudButton Href="@themeToggleHref"
+                       Variant="Variant.Outlined" Size="Size.Small" Color="Color.Default"
+                       StartIcon="@(isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                       Style="border-radius: 20px;">
+                @(isDark ? "Light mode" : "Dark mode")
+            </MudButton>
+        </div>
+
+        <div class="d-flex flex-grow-1 align-center justify-center pa-6">
+            <div style="width: 100%; max-width: 400px;">
+                <MudText Typo="Typo.h4" Class="mb-1"><b>Sign in</b></MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">Use your xdsdata email to login.</MudText>
+
+                <StatusMessage Message="@errorMessage" />
+
+                @* Native InputText/InputCheckbox, not MudTextField/MudCheckBox: this page
+                   is static-rendered, and Mud inputs emit no name attribute, so the browser
+                   posts no Input.* fields, [SupplyParameterFromForm] nulls Input, and
+                   EditForm throws "requires a Model or EditContext". Native inputs emit
+                   name="Input.Email" etc. Styled below to match MudBlazor. *@
+                <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger" role="alert" />
+
+                    <div class="login-field">
+                        <label for="login-email">Email address</label>
+                        <InputText id="login-email" @bind-Value="Input.Email" type="email" autocomplete="username" aria-required="true" placeholder="name@xdsdata.com" />
+                        <ValidationMessage For="() => Input.Email" class="text-danger" />
+                    </div>
+
+                    <div class="login-field">
+                        <div class="d-flex justify-space-between align-center">
+                            <label for="login-password">Password</label>
+                            <MudLink Href="Account/ForgotPassword" Typo="Typo.body2">Forgot password?</MudLink>
+                        </div>
+                        <InputText id="login-password" @bind-Value="Input.Password" type="password" autocomplete="current-password" aria-required="true" />
+                        <ValidationMessage For="() => Input.Password" class="text-danger" />
+                    </div>
+
+                    <label class="login-check">
+                        <InputCheckbox @bind-Value="Input.RememberMe" />
+                        <span>Keep me signed in on this device</span>
+                    </label>
+
+                    <button type="submit" class="login-submit">Sign in</button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
 
 @code {
     private string? errorMessage;
+    private bool isDark;
+    private string themeToggleHref = "";
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -103,11 +127,36 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // A POST with no Input.* fields binds this to null; EditForm would then throw.
+        Input ??= new();
+
         if (HttpMethods.IsGet(HttpContext.Request.Method))
         {
             // Clear the existing external cookie to ensure a clean login process
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
         }
+
+        // This page is static-rendered (cookie auth sign-in needs a real HTTP
+        // response, not an interactive circuit), so the theme toggle can't use
+        // JS interop like the rest of the app -- it's a plain link that flips
+        // a query param, read here and persisted back to the shared cookie.
+        var requestedTheme = HttpContext.Request.Query["theme"].FirstOrDefault();
+        if (requestedTheme is "light" or "dark")
+        {
+            HttpContext.Response.Cookies.Append(ThemeService.CookieName, requestedTheme, new CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddYears(1),
+                IsEssential = true,
+                SameSite = SameSiteMode.Lax
+            });
+            isDark = requestedTheme == "dark";
+        }
+        else
+        {
+            isDark = HttpContext.Request.Cookies[ThemeService.CookieName] != "light";
+        }
+
+        themeToggleHref = NavigationManager.GetUriWithQueryParameter("theme", isDark ? "light" : "dark");
     }
 
     public async Task LoginUser()
@@ -120,13 +169,18 @@
             Logger.LogInformation("User '{Email}' logged in successfully.", Input.Email);
 
             var user = await SignInManager.UserManager.FindByEmailAsync(Input.Email);
-            if (user != null && !user.MustChangePassword)
+            // New accounts carry the "MustChangePassword" role (see Register /
+            // ChangePassword) -- only those go to Change Password first. Everyone
+            // else lands on the data cleaning dashboard (Home, "/") unless they
+            // were bounced here from another page (ReturnUrl).
+            var mustChange = user != null && await SignInManager.UserManager.IsInRoleAsync(user, "MustChangePassword");
+            if (mustChange)
             {
-                RedirectManager.RedirectTo("/Account/Manage/ChangePassword");
+                RedirectManager.RedirectTo("Account/Manage/ChangePassword");
             }
             else
             {
-                RedirectManager.RedirectTo(ReturnUrl);
+                RedirectManager.RedirectTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl);
             }
         }
         else if (result.RequiresTwoFactor)
