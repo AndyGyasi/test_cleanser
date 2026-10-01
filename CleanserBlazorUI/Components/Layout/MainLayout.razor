@@ -98,7 +98,7 @@
         // or not the page itself ends up interactive) -- reading the cookie
         // here means the correct theme applies on first paint everywhere,
         // including static-only pages like Login that never get a circuit.
-        ThemeService.SetFromCookieValue(HttpContext?.Request.Cookies[ThemeService.CookieName]);
+        ThemeService.SetFromCookieValue(ThemeService.FromRequest(HttpContext));
 
         if (AuthenticationStateTask != null)
         {

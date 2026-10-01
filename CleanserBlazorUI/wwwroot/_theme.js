@@ -7,6 +7,7 @@ window.cleanserTheme = {
         return match ? decodeURIComponent(match[1]) : null;
     },
     set: function (value) {
+        document.documentElement.dataset.theme = value;
         document.cookie = "cleanser-theme=" + encodeURIComponent(value) + ";path=/;max-age=31536000;SameSite=Lax";
     }
 };

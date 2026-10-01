@@ -1,0 +1,92 @@
+/* Cleanser UI -- design tokens and shared component styles (from the UI collection).
+   Themes follow <html data-theme="dark|light">, set server-side from the theme cookie
+   (App.razor) and updated live by _theme.js. All component classes are prefixed cx-
+   so they never collide with Bootstrap or MudBlazor. */
+
+:root,
+html[data-theme="dark"] {
+  --bg: #071A1F;
+  --side: #0A2228;
+  --card: #0D262C;
+  --card-2: #0A2025;
+  --border: #18363D;
+  --input: #0A2025;
+  --input-border: #2A4A51;
+  --text: #E6F0EE;
+  --sub: #B0C4C1;
+  --muted: #8AA5A1;
+  --brand: #4FD18B;
+  --link: #4FD18B;
+  --accent: #2FBF71;
+  --accent-ink: #06251A;
+  --primary: #157A47;
+  --primary-hover: #126B3E;
+  --active: #123A33;
+  --chip: #16343B;
+  --chip-text: #B9CBC8;
+  --pill-bg: #0D2E29;
+  --pill-border: #1F4A42;
+  --pill-text: #7FE0AA;
+  --warn-bg: #3A2A12;
+  --warn: #F2B85C;
+  --danger-bg: #3D1D17;
+  --danger: #F2A18C;
+  --danger-border: #7A3A2B;
+  --info-bg: #12304A;
+  --info: #9CCBF2;
+  --track: #1A3940;
+  --bar: #2FBF71;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  --bg: #F6F8F7;
+  --side: #FFFFFF;
+  --card: #FFFFFF;
+  --card-2: #F3F7F5;
+  --border: #DCE6E3;
+  --input: #FFFFFF;
+  --input-border: #C3D4CF;
+  --text: #0E2A2F;
+  --sub: #47625E;
+  --muted: #5F7773;
+  --brand: #157A47;
+  --link: #126B3E;
+  --accent: #2FBF71;
+  --accent-ink: #06251A;
+  --primary: #157A47;
+  --primary-hover: #126B3E;
+  --active: #DCF1E6;
+  --chip: #DDE9E5;
+  --chip-text: #2F4B47;
+  --pill-bg: #DCF1E6;
+  --pill-border: #B5DDC7;
+  --pill-text: #126B3E;
+  --warn-bg: #FDF0D9;
+  --warn: #8A5A0A;
+  --danger-bg: #FCE6E0;
+  --danger: #A23A22;
+  --danger-border: #E9B3A5;
+  --info-bg: #E2EEF9;
+  --info: #1F5A8A;
+  --track: #E3ECE9;
+  --bar: #1E9E5E;
+  --shadow: 0 10px 30px rgba(14, 42, 47, 0.12);
+  color-scheme: light;
+}
+
+html, body {
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+body { font-size: 14px; line-height: 1.45; margin: 0; }
+a { color: var(--link); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cx-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.cx-muted { color: var(--muted); }
+.cx-sub { color: var(--sub); }
+.cx-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

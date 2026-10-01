@@ -13,6 +13,17 @@ public class ThemeService
 {
     public const string CookieName = "cleanser-theme";
 
+    // The theme a request asks for: an explicit ?theme= (the login page's
+    // toggle link, whose cookie isn't visible until the next request) wins
+    // over the stored cookie. Null = no preference, i.e. the dark default.
+    public static string? FromRequest(HttpContext? http)
+    {
+        var q = http?.Request.Query["theme"].FirstOrDefault();
+        if (q is "light" or "dark") return q;
+        var c = http?.Request.Cookies[CookieName];
+        return c is "light" or "dark" ? c : null;
+    }
+
     public bool IsDark { get; private set; } = true;
     public event Action? Changed;
 
