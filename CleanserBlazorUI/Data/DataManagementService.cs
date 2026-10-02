@@ -1224,8 +1224,15 @@ WHERE t.SubscriberCode = {{0}} AND (
     // means it's logged but unassigned.
     public async Task<(bool Found, string? AssignTo)> GetFileAssignmentAsync(string filename)
     {
+        // The log stores the file's name WITHOUT the .xlsx/.xls ending (e.g. LEA0126_IND), while the uploaded file
+        // has it (LEA0126_IND.xlsx), so look for either form.
+        var bareName = filename;
+        foreach (var ext in new[] { ".xlsx", ".xls" })
+        {
+            if (filename.EndsWith(ext, StringComparison.OrdinalIgnoreCase)) { bareName = filename[..^ext.Length]; break; }
+        }
         var row = await _xdsDataLogDbContext.ReceivedTrans
-            .Where(r => r.RenamedFile == filename)
+            .Where(r => r.RenamedFile == filename || r.RenamedFile == bareName)
             .Select(r => new { r.AssignTo })
             .FirstOrDefaultAsync();
 

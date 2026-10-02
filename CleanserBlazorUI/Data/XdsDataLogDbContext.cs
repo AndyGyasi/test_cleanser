@@ -12,6 +12,11 @@ public class XdsDataLogDbContext(DbContextOptions<XdsDataLogDbContext> options) 
     public DbSet<Subscriber> Subscribers { get; set; }
     public DbSet<SubscriberCategory> SubscriberCategories { get; set; }
 
+    // Every column this app reads from the external database is mapped as text. The real tables keep some of
+    // these in numeric or other column types (an ID stored as a number, for example), and reading a number
+    // straight into a text property throws "Unable to cast Int32 to String" and stops the whole run. So each
+    // table is read through a query that turns the columns into text first, whatever type they are stored as.
+    // Nothing is ever written to these tables.
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -19,25 +24,25 @@ public class XdsDataLogDbContext(DbContextOptions<XdsDataLogDbContext> options) 
         builder.Entity<ReceivedTrans>(e =>
         {
             e.HasNoKey();
-            e.ToTable("ReceivedTrans", "Transact");
+            e.ToSqlQuery("SELECT CAST(RenamedFile AS nvarchar(500)) AS RenamedFile, CAST(AssignTo AS nvarchar(100)) AS AssignTo FROM [Transact].[ReceivedTrans]");
         });
 
         builder.Entity<RingUser>(e =>
         {
             e.HasNoKey();
-            e.ToTable("Users", "Ring");
+            e.ToSqlQuery("SELECT CAST(UserID AS nvarchar(100)) AS UserID, CAST(Email AS nvarchar(500)) AS Email FROM [Ring].[Users]");
         });
 
         builder.Entity<Subscriber>(e =>
         {
             e.HasNoKey();
-            e.ToTable("Subscribers", "Subscriber");
+            e.ToSqlQuery("SELECT CAST(ShortName AS nvarchar(100)) AS ShortName, CAST(SubName AS nvarchar(500)) AS SubName, CAST(SubCode AS nvarchar(100)) AS SubCode, CAST(SubXDSCode AS nvarchar(100)) AS SubXDSCode, CAST(SubCategoryCode AS nvarchar(100)) AS SubCategoryCode FROM [Subscriber].[Subscribers]");
         });
 
         builder.Entity<SubscriberCategory>(e =>
         {
             e.HasNoKey();
-            e.ToTable("SubscriberCategory", "Subscriber");
+            e.ToSqlQuery("SELECT CAST(SubCategoryCode AS nvarchar(100)) AS SubCategoryCode, CAST(CatShortName AS nvarchar(200)) AS CatShortName, CAST(CatDescription AS nvarchar(500)) AS CatDescription FROM [Subscriber].[SubscriberCategory]");
         });
     }
 }
