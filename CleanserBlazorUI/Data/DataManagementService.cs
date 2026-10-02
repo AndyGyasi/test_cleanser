@@ -16,6 +16,48 @@ public class DataManagementService
     // Returns all reference records for this subscriber.
     // The reference always holds the cumulative known state — every unique
     // (AccNum, CustomerID, DisbursementDate) ever seen for this subscriber.
+    // ---- Reference rows for the records in ONE uploaded file --------------------------------------
+    // Cleaning only needs the saved reference rows whose account number or customer ID appears in the
+    // file (the matcher compares by account + customer, the conflict check by customer, the closed
+    // facility check by account + customer + disbursement date). Reading a subscriber's whole history to
+    // use a handful of rows is wasted time, so the database picks out just those rows. The keys are made
+    // the same way the cleaner makes them (spaces removed, upper case, and for all-digit customer IDs the
+    // leading zeros dropped), and the cleaner's own matching still runs on whatever comes back.
+    private const string SqlStrip = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({0},' ',''),CHAR(9),''),CHAR(10),''),CHAR(13),''),NCHAR(160),'')";
+
+    private async Task<List<T>> LoadReferenceRowsForKeysAsync<T>(DbSet<T> set, string subscriberCode, IEnumerable<string> accountKeys, IEnumerable<string> customerKeys) where T : class
+    {
+        var accts = accountKeys.Where(k => !string.IsNullOrWhiteSpace(k)).Distinct().ToList();
+        var custs = customerKeys.Where(k => !string.IsNullOrWhiteSpace(k)).Distinct().ToList();
+        if (accts.Count == 0 && custs.Count == 0) return new List<T>();
+
+        var entity = _context.Model.FindEntityType(typeof(T))!;
+        var table = $"[{entity.GetSchema() ?? "dbo"}].[{entity.GetTableName()}]";
+        var acctExpr = "UPPER(" + string.Format(SqlStrip, "t.CreditFacilityAccNum") + ")";
+        var sql = $@"SELECT t.* FROM {table} t
+CROSS APPLY (SELECT c = UPPER({string.Format(SqlStrip, "t.CustomerID")})) x
+WHERE t.SubscriberCode = {{0}} AND (
+    {acctExpr} IN (SELECT [value] FROM OPENJSON({{1}}))
+    OR (CASE WHEN x.c = '' THEN ''
+             WHEN x.c NOT LIKE '%[^0-9]%' THEN (CASE WHEN PATINDEX('%[^0]%', x.c) = 0 THEN '0' ELSE SUBSTRING(x.c, PATINDEX('%[^0]%', x.c), 4000) END)
+             ELSE x.c END) IN (SELECT [value] FROM OPENJSON({{2}})))";
+
+        return await set.FromSqlRaw(sql, subscriberCode,
+                System.Text.Json.JsonSerializer.Serialize(accts),
+                System.Text.Json.JsonSerializer.Serialize(custs))
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
+    public async Task<List<IndividualRef>> GETReferenceDataForRecords_IND(string fileShortName, IEnumerable<string> accountKeys, IEnumerable<string> customerKeys)
+        => await LoadReferenceRowsForKeysAsync(_context.IndividualsData, await GetFileShortCodeFromFileName(fileShortName), accountKeys, customerKeys);
+
+    public async Task<List<BusinessRef>> GETReferenceDataForRecords_BUS(string fileShortName, IEnumerable<string> accountKeys, IEnumerable<string> customerKeys)
+        => await LoadReferenceRowsForKeysAsync(_context.BusinessesData, await GetFileShortCodeFromFileName(fileShortName), accountKeys, customerKeys);
+
+    public async Task<List<IndividualMobileRef>> GETReferenceDataForRecords_INDMobile(string fileShortName, IEnumerable<string> accountKeys, IEnumerable<string> customerKeys)
+        => await LoadReferenceRowsForKeysAsync(_context.IndividualsMobileData, await GetFileShortCodeFromFileName(fileShortName), accountKeys, customerKeys);
+
     public async Task<List<IndividualRef>> GETReferenceData_IND(string fileShortName)
     {
         var subscriber = await GetFileShortCodeFromFileName(fileShortName);

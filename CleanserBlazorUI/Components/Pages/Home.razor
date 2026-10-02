@@ -3871,7 +3871,11 @@
                         AlertSeverity = MudBlazor.Severity.Success;
                         AlertSeverityVisible = "d-block";
 
-                        var RefData = await DataManagementService.GETReferenceData_IND(filename);
+                        // Only the reference rows for the accounts and customers in THIS file (see
+                        // GETReferenceDataForRecords_IND) -- not the subscriber's whole history.
+                        var RefData = await DataManagementService.GETReferenceDataForRecords_IND(filename,
+                            ExcelDataRecieved.Select(r => NormalizeAccountNumber(r.CreditFacilityAccNum?.Data)),
+                            ExcelDataRecieved.Select(r => NormalizeCustomerId(r.CustomerID?.Data)));
                         isSubscriber_X_or_Y = await DataManagementService.GetSubscribeX_or_Y(filename);
                         var (mainMatcherTransformer, _duplicatesInd, _correctDateOfBirth, _dobIssues, _matchdata, _newdata, _duplicateCount) = REF_MainMatcherTransformerInd_Clean_IND(RefData, ExcelDataRecieved);
                         var mainMatcherTransformer_temp = DuplicateUser_CustomerIDAndDateOfBirth(mainMatcherTransformer);
@@ -4095,7 +4099,9 @@
                         // transformer and cross-record-check logic used for regular
                         // Individual records can be reused unchanged (see
                         // DataManagementService.MapMobileToIndividualRefShape).
-                        var RefDataMobile = await DataManagementService.GETReferenceData_INDMobile(filename);
+                        var RefDataMobile = await DataManagementService.GETReferenceDataForRecords_INDMobile(filename,
+                            ExcelDataRecieved.Select(r => NormalizeAccountNumber(r.CreditFacilityAccNum?.Data)),
+                            ExcelDataRecieved.Select(r => NormalizeCustomerId(r.CustomerID?.Data)));
                         var RefData = DataManagementService.MapMobileToIndividualRefShape(RefDataMobile);
                         isSubscriber_X_or_Y = await DataManagementService.GetSubscribeX_or_Y(filename);
                         var (mainMatcherTransformer, _duplicatesInd, _correctDateOfBirth, _dobIssues, _matchdata, _newdata, _duplicateCount) = REF_MainMatcherTransformerInd_Clean_IND(RefData, ExcelDataRecieved);
@@ -4269,7 +4275,9 @@
                         AlertSeverity = MudBlazor.Severity.Success;
                         AlertSeverityVisible = "d-block";
 
-                        var RefData = await DataManagementService.GETReferenceData_BUS(filename);
+                        var RefData = await DataManagementService.GETReferenceDataForRecords_BUS(filename,
+                            ExcelDataRecieved.Select(r => NormalizeAccountNumber(r.Facilityaccnum?.Data)),
+                            ExcelDataRecieved.Select(r => NormalizeCustomerId(r.CustomerID?.Data)));
                         var (mainMatcherTransformer, _duplicatesInd, _correctDateOfBirth, _dobIssues, _matchdata, _newdata, _duplicateCount) = REF_MainMatcherTransformerInd_Clean_BUS(RefData, ExcelDataRecieved);
                         if (CleanOnlyOrCleanAndReference == false)
                         {
