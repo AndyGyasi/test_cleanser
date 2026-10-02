@@ -17,11 +17,15 @@
 <MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
 
     <section class="cx-card">
-        <div class="cx-card-head"><h2 class="cx-card-title">Add a mapping</h2></div>
+        <div class="cx-card-head"><h2 class="cx-card-title">@(editingId == null ? "Add a mapping" : "Edit mapping")</h2></div>
         <div class="cx-actions">
             <label class="cx-field cx-grow">Replace this<input class="cx-input" @bind="short_value" @bind:event="oninput" /></label>
             <label class="cx-field cx-grow">With this<input class="cx-input" @bind="long_value" @bind:event="oninput" /></label>
             <button type="button" class="cx-btn cx-btn-primary cx-align-end" @onclick="AddBusinessNamesValue">Save changes</button>
+            @if (editingId != null)
+            {
+                <button type="button" class="cx-btn cx-btn-ghost cx-align-end" @onclick="CancelEdit">Cancel</button>
+            }
         </div>
     </section>
 
@@ -50,8 +54,7 @@
                                 <td>@bs.DateCreated</td>
                                 <td>@bs.DateModified</td>
                                 <td class="cx-col-actions">
-                                    @* Edit has never been wired up on this page; kept visible but switched off. *@
-                                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled title="Editing is not available yet">Edit</button>
+                                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" @onclick="@(() => EditBusinessNamesValue(bs))">Edit</button>
                                     <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm cx-btn-danger" @onclick="@(() => DeleteBusinessNamesValue(bs))">Delete</button>
                                 </td>
                             </tr>
@@ -112,8 +115,33 @@
         string AlertSeverityVisible = "d-none";
     }
 
+    private int? editingId;
+    private void CancelEdit() { editingId = null; short_value = string.Empty; long_value = string.Empty; }
+    private async Task EditBusinessNamesValue(BusSettNormalizer item)
+    {
+        editingId = item.Id;
+        short_value = item.ShortValue ?? string.Empty;
+        long_value = item.LongValue ?? string.Empty;
+        await InvokeAsync(StateHasChanged);
+    }
     private async Task AddBusinessNamesValue()
     {
+        cancellationTokenSource = new CancellationTokenSource();
+        if (editingId != null)
+        {
+            if (string.IsNullOrWhiteSpace(short_value) || string.IsNullOrWhiteSpace(long_value)) return;
+            var current = BusinessNamesSettings.FirstOrDefault(x => x.Id == editingId);
+            if (current != null && current.ShortValue != short_value && await DataManagementService.BUS_NUM_GetSettingOne(short_value))
+            {
+                _ = ShowTextForThreeSecondsAsync(false, cancellationTokenSource.Token);
+                return;
+            }
+            await DataManagementService.BUS_NUM_UpdateSetting(editingId.Value, short_value, long_value);
+            editingId = null; short_value = string.Empty; long_value = string.Empty;
+            BusinessNamesSettings = await DataManagementService.BUS_NUM_GetAllSettingsAsync();
+            _ = ShowTextForThreeSecondsAsync(true, cancellationTokenSource.Token, "Saved successfully");
+            return;
+        }
         if (dateCreated == default)
         {
             dateCreated = DateTime.Now;
@@ -137,11 +165,13 @@
                 settingData = new List<BusSettNormalizer>();
                 short_value = string.Empty;
                 long_value = string.Empty;
-                await ShowTextForThreeSecondsAsync(true, cancellationTokenSource.Token);
+                // show the new row straight away; the notice then clears itself after 3 seconds
+                BusinessNamesSettings = await DataManagementService.BUS_NUM_GetAllSettingsAsync();
+                _ = ShowTextForThreeSecondsAsync(true, cancellationTokenSource.Token);
             }
             else
             {
-                await ShowTextForThreeSecondsAsync(false, cancellationTokenSource.Token);
+                _ = ShowTextForThreeSecondsAsync(false, cancellationTokenSource.Token);
             }
             settingsClass = new BusSettNormalizer();
         }
@@ -153,6 +183,7 @@
         if (item != null)
         {
             await DataManagementService.BUS_NUM_DeleteSetting(item);
+            if (editingId == item.Id) CancelEdit();
         }
         BusinessNamesSettings = await DataManagementService.BUS_NUM_GetAllSettingsAsync();
         await InvokeAsync(StateHasChanged);
@@ -170,7 +201,7 @@
         // long_value = item.LongValue;
         // await InvokeAsync(StateHasChanged);
     }
-    public async Task ShowTextForThreeSecondsAsync(bool isSuccussfullyAdd, CancellationToken cancellationToken)
+    public async Task ShowTextForThreeSecondsAsync(bool isSuccussfullyAdd, CancellationToken cancellationToken, string successText = "Added successfully")
     {
         try
         {
@@ -178,7 +209,7 @@
             {
                 AlertSeverityVisible = "d-block";
                 AlertSeverity = MudBlazor.Severity.Success;
-                AlertSeverityMessage = "Added successfully";
+                AlertSeverityMessage = successText;
             }
             else
             {

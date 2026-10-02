@@ -17,10 +17,14 @@
 <MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
 
     <section class="cx-card">
-        <div class="cx-card-head"><h2 class="cx-card-title">Add a business name</h2></div>
+        <div class="cx-card-head"><h2 class="cx-card-title">@(editingId == null ? "Add a business name" : "Edit business name")</h2></div>
         <div class="cx-actions">
             <label class="cx-field cx-grow">Business name<input class="cx-input" @bind="text_value" @bind:event="oninput" placeholder="Enter business name here" /></label>
-            <button type="button" class="cx-btn cx-btn-primary cx-align-end" @onclick="AddBusinessNamesValue">Add</button>
+            <button type="button" class="cx-btn cx-btn-primary cx-align-end" @onclick="AddBusinessNamesValue">@(editingId == null ? "Add" : "Save changes")</button>
+            @if (editingId != null)
+            {
+                <button type="button" class="cx-btn cx-btn-ghost cx-align-end" @onclick="CancelEdit">Cancel</button>
+            }
         </div>
     </section>
 
@@ -72,9 +76,27 @@
         BusinessNamesSettings = await DataManagementService.GetAllSettingsAsync(SettingsDataType.BusinessName);
         string AlertSeverityVisible = "d-none";
     }
+    int? editingId;
+    void CancelEdit() { editingId = null; text_value = string.Empty; }
     async Task AddBusinessNamesValue()
     {
         cancellationTokenSource = new CancellationTokenSource();
+        if (editingId != null)
+        {
+            var newValue = (text_value ?? string.Empty).Trim().ToUpper();
+            if (newValue.Length == 0) return;
+            var current = BusinessNamesSettings.FirstOrDefault(x => x.Id == editingId);
+            if (current != null && current.Value != newValue && await DataManagementService.GetSettingOne(newValue, SettingsDataType.BusinessName))
+            {
+                _ = ShowTextForThreeSecondsAsync(false, cancellationTokenSource.Token);
+                return;
+            }
+            await DataManagementService.UpdateSetting(editingId.Value, newValue, SettingsDataType.BusinessName);
+            editingId = null; text_value = string.Empty;
+            BusinessNamesSettings = await DataManagementService.GetAllSettingsAsync(SettingsDataType.BusinessName);
+            _ = ShowTextForThreeSecondsAsync(true, cancellationTokenSource.Token, "Saved successfully");
+            return;
+        }
 
         settingsClass = new SettingsClass()
         {
@@ -88,11 +110,13 @@
             {
                 await DataManagementService.AddSettings(settingsClass, SettingsDataType.BusinessName);
                 text_value = string.Empty;
-                await  ShowTextForThreeSecondsAsync(true, cancellationTokenSource.Token);
+                // show the new name straight away; the notice then clears itself after 3 seconds
+                BusinessNamesSettings = await DataManagementService.GetAllSettingsAsync(SettingsDataType.BusinessName);
+                _ = ShowTextForThreeSecondsAsync(true, cancellationTokenSource.Token);
             }
             else
             {
-                await ShowTextForThreeSecondsAsync(false, cancellationTokenSource.Token);
+                _ = ShowTextForThreeSecondsAsync(false, cancellationTokenSource.Token);
             }
             settingsClass = new SettingsClass();
             text_value = string.Empty;
@@ -105,6 +129,7 @@
         if (item != null)
         {
             await DataManagementService.DeleteSetting(item, SettingsDataType.BusinessName);
+            if (editingId == item.Id) CancelEdit();
         }
         BusinessNamesSettings = await DataManagementService.GetAllSettingsAsync(SettingsDataType.BusinessName);
         await InvokeAsync(StateHasChanged);
@@ -112,12 +137,12 @@
     private async Task EditBusinessNamesValue(SettingsClass item)
     {
         text_value = item.Value;
-        item.DataType = SettingsDataType.BusinessName;
+        editingId = item.Id;
         await InvokeAsync(StateHasChanged);
     }
 
 
-    public async Task ShowTextForThreeSecondsAsync(bool isSuccussfullyAdd, CancellationToken cancellationToken)
+    public async Task ShowTextForThreeSecondsAsync(bool isSuccussfullyAdd, CancellationToken cancellationToken, string successText = "Added successfully")
     {
         try
         {
@@ -125,7 +150,7 @@
             {
                 AlertSeverityVisible = "d-block";
                 AlertSeverity = MudBlazor.Severity.Success;
-                AlertSeverityMessage = "Added successfully";
+                AlertSeverityMessage = successText;
             }
             else
             {

@@ -820,6 +820,14 @@ public class DataManagementService
         _context.Settings.Remove(itemToRemove);
         await _context.SaveChangesAsync();
     }
+    /// <summary>Changes the text of one saved name in place (by Id).</summary>
+    public async Task UpdateSetting(int id, string newValue, SettingsDataType settingsDataType)
+    {
+        var item = await _context.Settings.FirstOrDefaultAsync(s => s.Id == id && s.DataType == settingsDataType);
+        if (item == null) return;
+        item.Value = newValue;
+        await _context.SaveChangesAsync();
+    }
     public async Task<List<SettingsClass>> GetAllSettingsAsync(SettingsDataType settingsDataType)
     {
         return await _context.Settings.Where(s => s.DataType == settingsDataType).OrderBy(s => s.Value).ToListAsync();
@@ -885,11 +893,11 @@ public class DataManagementService
     {
         if (_item == null) return;
         var existingItem = await _context.BusinessClassNormalizer.FirstOrDefaultAsync(s => s.ShortValue == _item.ShortValue);
-        DateTime date = new DateTime();
+        DateTime date = DateTime.Now;
         if (existingItem == null)
         {
-            _item.DateCreated = date.Date;
-            _item.DateModified = date.Date;
+            _item.DateCreated = date;
+            _item.DateModified = date;
             await _context.BusinessClassNormalizer.AddAsync(_item);
         }
         await _context.SaveChangesAsync();
@@ -911,6 +919,16 @@ public class DataManagementService
     //    _context.Settings.Remove(itemToRemove);
     //    await _context.SaveChangesAsync();
     //}
+    /// <summary>Changes one saved short-name to full-name mapping in place (by Id) and stamps the modified date.</summary>
+    public async Task BUS_NUM_UpdateSetting(int id, string shortValue, string longValue)
+    {
+        var item = await _context.BusinessClassNormalizer.FirstOrDefaultAsync(s => s.Id == id);
+        if (item == null) return;
+        item.ShortValue = shortValue;
+        item.LongValue = longValue;
+        item.DateModified = DateTime.Now;
+        await _context.SaveChangesAsync();
+    }
     public async Task<List<BusSettNormalizer>> BUS_NUM_GetAllSettingsAsync()
     {
         return await _context.BusinessClassNormalizer.OrderBy(s => s.ShortValue).ToListAsync();
