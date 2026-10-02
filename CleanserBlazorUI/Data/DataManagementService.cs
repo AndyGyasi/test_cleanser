@@ -23,6 +23,16 @@ public class DataManagementService
     // use a handful of rows is wasted time, so the database picks out just those rows. The keys are made
     // the same way the cleaner makes them (spaces removed, upper case, and for all-digit customer IDs the
     // leading zeros dropped), and the cleaner's own matching still runs on whatever comes back.
+    private static string StripWhitespace(string? v) => string.IsNullOrWhiteSpace(v) ? string.Empty : new string(v.Where(c => !char.IsWhiteSpace(c)).ToArray());
+    // Keys used to pick out reference rows: spaces removed, upper case, and for all-digit customer IDs the leading zeros dropped.
+    internal static string RefAccountKey(string? v) => StripWhitespace(v).ToUpperInvariant();
+    internal static string RefCustomerKey(string? v)
+    {
+        var n = StripWhitespace(v).ToUpperInvariant();
+        if (n.Length > 0 && n.All(char.IsDigit)) { n = n.TrimStart('0'); if (n.Length == 0) n = "0"; }
+        return n;
+    }
+
     private const string SqlStrip = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({0},' ',''),CHAR(9),''),CHAR(10),''),CHAR(13),''),NCHAR(160),'')";
 
     private async Task<List<T>> LoadReferenceRowsForKeysAsync<T>(DbSet<T> set, string subscriberCode, IEnumerable<string> accountKeys, IEnumerable<string> customerKeys) where T : class
@@ -152,9 +162,10 @@ WHERE t.SubscriberCode = {{0}} AND (
         var reportingPeriod = GetReportingPeriodLabel(fileShortName);
         var changelog  = new List<(string, string, string, string)>();
 
-        var existing = await _context.IndividualsData
-            .Where(r => r.SubscriberCode == subscriber)
-            .ToListAsync();
+        // Only the saved rows for the accounts and customers in this file -- not the subscriber's whole history.
+        // (Untracked: the bulk update below writes the objects itself and does not need change tracking.)
+        var existing = await LoadReferenceRowsForKeysAsync(_context.IndividualsData, subscriber,
+            dataFromExcel.Select(i => RefAccountKey(i.CreditFacilityAccNum)), dataFromExcel.Select(i => RefCustomerKey(i.CustomerID)));
 
         // The reference table can genuinely have duplicate (AccNum, CustomerID,
         // DisbursementDate) rows -- the old Register tool used to blind-insert a
@@ -328,9 +339,8 @@ WHERE t.SubscriberCode = {{0}} AND (
         var reportingPeriod = GetReportingPeriodLabel(fileShortName);
         var changelog  = new List<(string, string, string, string)>();
 
-        var existing = await _context.IndividualsMobileData
-            .Where(r => r.SubscriberCode == subscriber)
-            .ToListAsync();
+        var existing = await LoadReferenceRowsForKeysAsync(_context.IndividualsMobileData, subscriber,
+            dataFromExcel.Select(i => RefAccountKey(i.CreditFacilityAccNum)), dataFromExcel.Select(i => RefCustomerKey(i.CustomerID)));
 
         var existingIndex = existing
             .GroupBy(r => (Norm(r.CreditFacilityAccNum), Norm(r.CustomerID), Norm(r.DisbursementDate)))
@@ -469,9 +479,8 @@ WHERE t.SubscriberCode = {{0}} AND (
         var now        = DateTime.Now;
         var reportingPeriod = GetReportingPeriodLabel(fileShortName);
 
-        var existing = await _context.BusinessesData
-            .Where(r => r.SubscriberCode == subscriber)
-            .ToListAsync();
+        var existing = await LoadReferenceRowsForKeysAsync(_context.BusinessesData, subscriber,
+            dataFromExcel.Select(i => RefAccountKey(i.Facilityaccnum)), dataFromExcel.Select(i => RefCustomerKey(i.CustomerID)));
 
         // See matching fix on the Individual overload above -- avoids a
         // crash on duplicate reference rows.
