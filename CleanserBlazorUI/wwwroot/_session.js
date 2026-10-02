@@ -33,7 +33,7 @@
         lastPing = Date.now();
         try {
             const r = await fetch("/session/keepalive", { method: "POST", credentials: "same-origin" });
-            if (r.status === 401) end();
+            if (r.status === 200) end();   // 204 = still active, 200 "ended" = over
         } catch (e) { /* offline: try again on the next activity */ }
     }
 
@@ -53,14 +53,14 @@
 
     // Once this page has seen no activity for the whole window, ask the server before
     // ending anything: it also knows about running jobs (cleaning, referencing...), which
-    // keep a session alive without any mouse or keyboard activity. 401 = really over.
+    // keep a session alive without any mouse or keyboard activity. "ended" = really over.
     let checking = false;
     async function confirmIdle() {
         if (checking) return;
         checking = true;
         try {
             const r = await fetch("/session/check", { method: "POST", credentials: "same-origin" });
-            if (r.status === 401) end();
+            if (r.status === 200) end();   // 204 = still active, 200 "ended" = over
             else last = Date.now() - idleMs + 60000; // still active on the server: look again in a minute
         } catch (e) { /* offline: try again on the next tick */ }
         finally { checking = false; }

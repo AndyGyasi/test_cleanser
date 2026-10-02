@@ -280,16 +280,18 @@ app.MapGet("/api/password/generate", (HttpContext context) =>
 }).RequireAuthorization(policy => policy.RequireRole("admin", "superuser"));
 
 // Called by _session.js while the user is active; the request itself is what
-// refreshes the idle timer (see SessionIdle). 401 = the session has ended.
+// refreshes the idle timer (see SessionIdle). 204 = still active; 200 "ended" = the session has ended.
+// (Answered with a normal 200 rather than 401 so a session that has simply run out does not
+// show up as a red error in the browser console.)
 app.MapPost("/session/keepalive", (HttpContext context) =>
-        context.User.Identity?.IsAuthenticated == true ? Results.NoContent() : Results.StatusCode(StatusCodes.Status401Unauthorized))
+        context.User.Identity?.IsAuthenticated == true ? Results.NoContent() : Results.Text("ended"))
     .DisableAntiforgery();
 
 // _session.js asks this once its own idle window has passed. 204 = the server still
-// counts the session as active (e.g. a job is running), 401 = it has ended. The cookie
+// counts the session as active (e.g. a job is running), 200 "ended" = it has ended. The cookie
 // check treats this path as a pure probe, so asking never extends the session.
 app.MapPost("/session/check", (HttpContext context) =>
-        context.User.Identity?.IsAuthenticated == true ? Results.NoContent() : Results.StatusCode(StatusCodes.Status401Unauthorized))
+        context.User.Identity?.IsAuthenticated == true ? Results.NoContent() : Results.Text("ended"))
     .DisableAntiforgery();
 
 // _session.js sends an idle page here: end the session, then show the sign-in page.
