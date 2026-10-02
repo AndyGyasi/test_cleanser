@@ -4600,9 +4600,36 @@
         }
         return new CleaningStatus();
     }
+    // Safety net around a cleaning run: if anything fails (a database that cannot be reached, a table that is
+    // missing, a bad file), the page says what went wrong and goes back to normal, instead of the Cleaning
+    // button and the timer staying stuck. The details go to the server log.
     async Task RunCleanser(int id)
     {
+        try
+        {
+            await RunCleanserCore(id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Run cleanser failed");
+            AlertSeverity = MudBlazor.Severity.Error;
+            AlertSeverityMessage = "The run stopped because of an error: " + (ex.GetBaseException().Message) + " Nothing further was cleaned. Tell an administrator if this keeps happening.";
+            AlertSeverityVisible = "d-block";
+        }
+        finally
+        {
+            _processing = false;
+            progressIsVisible = "d-none";
+            if (_isRunning) StopTimer();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    async Task RunCleanserCore(int id)
+    {
         await using var job = await JobTracker.BeginAsync(); // keeps the session alive while this runs
+        var runWatch = System.Diagnostics.Stopwatch.StartNew();
+        Logger.LogInformation("Run cleanser started: {Count} file(s), type {Type}, clean only = {CleanOnly}", spreadsheetFileAndChipColor.Count, id, CleanOnlyOrCleanAndReference);
         correctDateOfBirth = dobIssues = matchdata = newdata = duplicateCount = "0";
         writeCounting = 0;
         readCounting = 0;
@@ -4679,6 +4706,8 @@
                 decisions.Add((item, thisFilename, isOwnerMatch || isAdmin || hasApprovedAccess, false, assignedUserId, true, string.Empty));
             }
         }
+
+        Logger.LogInformation("Run cleanser: ownership check finished after {Ms} ms", runWatch.ElapsedMilliseconds);
 
         // Prompt for cleaning purpose once, up front -- only when at least
         // one file will actually be cleaned this run (a Clean-Only/preview
@@ -4772,8 +4801,11 @@
                 }
             }
 
+            var fileWatch = System.Diagnostics.Stopwatch.StartNew();
             await GetSpreadsheetDataNew(decision.Item, id);
+            Logger.LogInformation("Run cleanser: {File} cleaned in {Ms} ms", decision.Filename, fileWatch.ElapsedMilliseconds);
         }
+        Logger.LogInformation("Run cleanser finished after {Ms} ms", runWatch.ElapsedMilliseconds);
         numberOfPassedCount = $"Passed Files ({passedRecord.Count})";
         numberOffailedCount = failedRecord.Count.ToString();
         progressIsVisible = "d-none";
