@@ -9,14 +9,15 @@
       "Microsoft.AspNetCore": "Warning"
     }
   },
-  "SmtpSettings": {
-    "Server": "smtp.titan.email",
-    "Port": 25,
-    "Username": "noreply.example@email.com",
-    "Password": "P@ssw0rd",
-    "EnableSsl": true,
-    "FromEmail": "noreply.example@email.com"
-  },
+  // COMMENTED OUT: emails are for sign-in only and the app sends none, so it no longer reads this section.
+  // "SmtpSettings": {
+  // "Server": "smtp.titan.email",
+  // "Port": 25,
+  // "Username": "noreply.example@email.com",
+  // "Password": "P@ssw0rd",
+  // "EnableSsl": true,
+  // "FromEmail": "noreply.example@email.com"
+  // },
   "AllowedHosts": "*"
 }
 //rename "example.appsettings.json" to  "appsettings.json"

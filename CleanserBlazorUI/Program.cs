@@ -1,9 +1,7 @@
 ﻿using CleanserBlazorUI.Components;
 using CleanserBlazorUI.Components.Account;
 using CleanserBlazorUI.Data;
-using CleanserBlazorUI.Models;
 using CleanserBlazorUI.Services;
-using ICleanserBlazorUI.Interface;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
