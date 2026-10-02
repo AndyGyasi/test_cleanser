@@ -1,0 +1,424 @@
+@page "/recent-cleaning-runs"
+@rendermode InteractiveServer
+@using ClosedXML.Excel
+@inject DataManagementService DataManagementService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
+
+@attribute [Authorize]
+
+<PageTitle>Recent cleaning runs</PageTitle>
+
+<div class="cx-page cx-clean cx-runs">
+    <header class="cx-page-head">
+        <div>
+            <span class="cx-crumb">Data cleaning</span>
+            <h1>Recent cleaning runs</h1>
+            <p>@(showEveryone ? "Every run by every associate." : "Your own runs.") The charts and the table follow the filters below.</p>
+        </div>
+        <div class="cx-actions">
+            <button type="button" class="cx-btn cx-btn-ghost" @onclick="ExportAsync" disabled="@(filtered.Count == 0 || exporting)">@(exporting ? "Preparing…" : "Export to Excel")</button>
+        </div>
+    </header>
+
+    <section class="cx-card">
+        <div class="cx-filter" role="group" aria-label="Type of run">
+            @foreach (var f in kinds)
+            {
+                <button type="button" class="cx-filter-btn" aria-pressed="@(kind == f ? "true" : "false")" @onclick="() => SetKind(f)">
+                    @f <span class="cx-badge">@(f == "All" ? loaded.Count : loaded.Count(r => r.Kind == f))</span>
+                </button>
+            }
+        </div>
+        <div class="cx-run-filters">
+            <label class="cx-field">Data provider
+                <select class="cx-select" @bind="provider" @bind:after="ReloadAsync">
+                    <option value="">All providers</option>
+                    @foreach (var p in options.DataProviders) { <option value="@p">@p</option> }
+                </select>
+            </label>
+            <label class="cx-field">Subscriber category
+                <select class="cx-select" @bind="category" @bind:after="ReloadAsync">
+                    <option value="">All categories</option>
+                    @foreach (var c in options.CategoryCodes) { <option value="@c">@CategoryLabel(c)</option> }
+                </select>
+            </label>
+            <label class="cx-field">Date cleaned, from
+                <input class="cx-input" type="date" @bind="from" @bind:after="ReloadAsync" />
+            </label>
+            <label class="cx-field">Date cleaned, to
+                <input class="cx-input" type="date" @bind="to" @bind:after="ReloadAsync" />
+            </label>
+            @if (showEveryone)
+            {
+                <label class="cx-field">Associate (who cleaned)
+                    <select class="cx-select" @bind="associate" @bind:after="ReloadAsync">
+                        <option value="">Everyone</option>
+                        @foreach (var a in options.Associates) { <option value="@a">@a</option> }
+                    </select>
+                </label>
+            }
+            @if (AnyFilter)
+            {
+                <button type="button" class="cx-btn cx-btn-ghost cx-align-end" @onclick="ClearAsync">Clear filters</button>
+            }
+        </div>
+        <p class="cx-sub">
+            <strong>Cleaned with reference check</strong>: "Clean only" was not ticked.
+            <strong>Clean only</strong>: ticked, file not yet in Transact.ReceivedTrans.
+            <strong>Re-cleaned</strong>: ticked, file already in Transact.ReceivedTrans (owner, admin or admin-approved access only).
+        </p>
+    </section>
+
+    @if (loading)
+    {
+        <section class="cx-card"><div class="cx-skeleton" style="height:180px"></div></section>
+    }
+    else if (filtered.Count == 0)
+    {
+        <section class="cx-card cx-empty"><strong>No runs match these filters.</strong></section>
+    }
+    else
+    {
+        <div class="cx-stats">
+            <div class="cx-stat cx-stat-total"><span>Runs</span><strong>@filtered.Count.ToString("N0")</strong></div>
+            <div class="cx-stat"><span>Different files</span><strong>@filtered.Select(r => r.Filename).Distinct().Count().ToString("N0")</strong></div>
+            <div class="cx-stat"><span>Data providers</span><strong>@filtered.Select(r => r.DataProvider).Distinct().Count().ToString("N0")</strong></div>
+            @if (showEveryone)
+            {
+                <div class="cx-stat"><span>Associates</span><strong>@filtered.Select(r => r.PerformedByEmail).Distinct().Count().ToString("N0")</strong></div>
+            }
+            <div class="cx-stat"><span>Re-cleaned</span><strong>@filtered.Count(r => r.Kind == "Re-cleaned").ToString("N0")</strong></div>
+        </div>
+
+        <div class="cx-chart-grid">
+            <section class="cx-card cx-chart-wide">
+                <div class="cx-card-head"><h2 class="cx-card-title">Runs @(byMonth ? "per month" : "per day")</h2></div>
+                <svg class="cx-chart" viewBox="0 0 640 230" role="img" aria-label="Runs over time">
+                    @foreach (var g in GridLines())
+                    {
+                        <line x1="40" x2="632" y1="@g.Y" y2="@g.Y" class="cx-grid" />
+                        @SvgText($"x=\"34\" y=\"{F(g.Y + 4)}\" class=\"cx-axis\" text-anchor=\"end\"", g.Label)
+                    }
+                    @for (int i = 0; i < buckets.Count; i++)
+                    {
+                        var b = buckets[i];
+                        var slot = 592.0 / buckets.Count;
+                        var w = Math.Max(3, Math.Min(34, slot * 0.7));
+                        var x = 40 + slot * i + (slot - w) / 2;
+                        double y = 190;
+                        foreach (var k in kindOrder)
+                        {
+                            var n = b.Counts.GetValueOrDefault(k);
+                            if (n == 0) continue;
+                            var h = 160.0 * n / yMax;
+                            y -= h;
+                            <rect x="@F(x)" y="@F(y)" width="@F(w)" height="@F(h)" class="@KindClass(k)"><title>@b.Label: @n @k</title></rect>
+                        }
+                        if (i % labelEvery == 0)
+                        {
+                            @SvgText($"x=\"{F(x + w / 2)}\" y=\"208\" class=\"cx-axis\" text-anchor=\"middle\"", b.Label)
+                        }
+                    }
+                </svg>
+                <div class="cx-legend">
+                    @foreach (var k in kindOrder) { <span><i class="@KindClass(k)"></i>@k</span> }
+                </div>
+            </section>
+
+            <section class="cx-card">
+                <div class="cx-card-head"><h2 class="cx-card-title">Runs by type</h2></div>
+                <svg class="cx-chart cx-donut" viewBox="0 0 200 200" role="img" aria-label="Runs by type">
+                    @{ double circ = 2 * Math.PI * 70; double offset = 0; }
+                    @foreach (var k in kindOrder)
+                    {
+                        var n = filtered.Count(r => r.Kind == k);
+                        if (n == 0) continue;
+                        var len = circ * n / filtered.Count;
+                        <circle cx="100" cy="100" r="70" fill="none" stroke-width="30" class="@KindClass(k, true)"
+                                stroke-dasharray="@F(len) @F(circ - len)" stroke-dashoffset="@F(-offset)" transform="rotate(-90 100 100)"><title>@k: @n</title></circle>
+                        offset += len;
+                    }
+                    <text x="100" y="98" text-anchor="middle" class="cx-donut-n">@filtered.Count.ToString("N0")</text>
+                    <text x="100" y="118" text-anchor="middle" class="cx-axis">runs</text>
+                </svg>
+                <div class="cx-legend">
+                    @foreach (var k in kindOrder) { <span><i class="@KindClass(k)"></i>@k (@filtered.Count(r => r.Kind == k))</span> }
+                </div>
+            </section>
+
+            <section class="cx-card">
+                <div class="cx-card-head"><h2 class="cx-card-title">Top data providers</h2></div>
+                @BarList(filtered.GroupBy(r => string.IsNullOrWhiteSpace(r.DataProvider) ? "(unknown)" : r.DataProvider))
+            </section>
+
+            <section class="cx-card">
+                <div class="cx-card-head"><h2 class="cx-card-title">@(showEveryone ? "Runs by associate" : "Runs by category")</h2></div>
+                @if (showEveryone)
+                {
+                    @BarList(filtered.GroupBy(r => r.PerformedByEmail))
+                }
+                else
+                {
+                    @BarList(filtered.GroupBy(r => string.IsNullOrEmpty(r.SubCategoryCode) ? "(none)" : CategoryLabel(r.SubCategoryCode)))
+                }
+            </section>
+        </div>
+
+        <section class="cx-card">
+            <div class="cx-card-head">
+                <h2 class="cx-card-title">Runs</h2>
+                <span class="cx-sub">Showing @(first)–@(last) of @filtered.Count.ToString("N0")</span>
+            </div>
+            <div class="cx-table-wrap">
+                <table class="cx-table">
+                    <thead><tr><th>When</th><th>Type</th><th>File</th><th>Data provider</th><th>Category</th><th>By</th><th>Purpose / basis</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in pageRows)
+                        {
+                            <tr>
+                                <td>@r.PerformedDate.ToString("dd MMM yyyy HH:mm")</td>
+                                <td><span class="cx-pill">@r.Kind</span></td>
+                                <td>@r.Filename</td>
+                                <td>@r.DataProvider</td>
+                                <td>@(string.IsNullOrEmpty(r.SubCategoryCode) ? "" : CategoryLabel(r.SubCategoryCode))</td>
+                                <td>@r.PerformedByEmail</td>
+                                <td>@r.Detail</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (totalPages > 1)
+            {
+                <nav class="cx-pager" aria-label="Pages">
+                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@(page == 1)" @onclick="() => GoTo(1)" aria-label="First page">«</button>
+                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@(page == 1)" @onclick="() => GoTo(page - 1)" aria-label="Previous page">‹</button>
+                    @foreach (var n in PageWindow())
+                    {
+                        <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm cx-page-n" aria-current="@(n == page ? "page" : null)" @onclick="() => GoTo(n)">@n</button>
+                    }
+                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@(page == totalPages)" @onclick="() => GoTo(page + 1)" aria-label="Next page">›</button>
+                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@(page == totalPages)" @onclick="() => GoTo(totalPages)" aria-label="Last page">»</button>
+                </nav>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    const int PageSize = 20;
+    static readonly string[] kinds = { "All", "Cleaned with reference check", "Clean only", "Re-cleaned" };
+    static readonly string[] kindOrder = { "Cleaned with reference check", "Clean only", "Re-cleaned" };
+
+    bool loading = true, exporting, showEveryone;
+    string kind = "All";
+    string? provider, category, associate;
+    DateTime? from, to;
+    string? myEmail;
+
+    List<CleaningRunRow> loaded = new();     // everything matching provider / category / dates / associate
+    List<CleaningRunRow> filtered = new();   // ...and the chosen type
+    List<CleaningRunRow> pageRows = new();
+    CleaningRunFilterOptions options = new();
+    Dictionary<string, string> categoryNames = new();
+    int page = 1, totalPages = 1, first, last;
+
+    bool AnyFilter => kind != "All" || !string.IsNullOrEmpty(provider) || !string.IsNullOrEmpty(category) || !string.IsNullOrEmpty(associate) || from != null || to != null;
+    string CategoryLabel(string code) => categoryNames.TryGetValue(code, out var d) && !string.IsNullOrWhiteSpace(d) ? d : code;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        myEmail = auth.User.Identity?.Name;
+        showEveryone = auth.User.IsInRole("admin");
+        categoryNames = await DataManagementService.GetSubscriberCategoryLookupAsync();
+        await ReloadAsync();
+    }
+
+    async Task ReloadAsync()
+    {
+        loading = true;
+        var only = showEveryone ? null : myEmail;
+        loaded = await DataManagementService.GetRecentCleaningRunsAsync(only, provider, category, from, to, showEveryone ? associate : null, take: 20000);
+        options = await DataManagementService.GetCleaningRunFilterOptionsAsync(only);
+        page = 1;
+        Recompute();
+        loading = false;
+    }
+
+    async Task ClearAsync()
+    {
+        kind = "All"; provider = category = associate = null; from = to = null;
+        await ReloadAsync();
+    }
+
+    void SetKind(string k) { kind = k; page = 1; Recompute(); }
+    void GoTo(int p) { page = Math.Clamp(p, 1, totalPages); SlicePage(); }
+
+    // ---- everything the charts and the table show comes from `filtered` ----
+    record Bucket(string Label, Dictionary<string, int> Counts) { public int Total => Counts.Values.Sum(); }
+    List<Bucket> buckets = new();
+    bool byMonth;
+    int yMax = 1, labelEvery = 1;
+
+    void Recompute()
+    {
+        filtered = (kind == "All" ? loaded : loaded.Where(r => r.Kind == kind).ToList()).OrderByDescending(r => r.PerformedDate).ToList();
+        totalPages = Math.Max(1, (int)Math.Ceiling(filtered.Count / (double)PageSize));
+        page = Math.Min(page, totalPages);
+        SlicePage();
+
+        buckets = new();
+        if (filtered.Count > 0)
+        {
+            var min = filtered.Min(r => r.PerformedDate).Date;
+            var max = filtered.Max(r => r.PerformedDate).Date;
+            byMonth = (max - min).TotalDays > 62;
+            if (byMonth)
+            {
+                for (var d = new DateTime(min.Year, min.Month, 1); d <= max; d = d.AddMonths(1))
+                    buckets.Add(new Bucket(d.ToString("MMM yy"), new()));
+                foreach (var r in filtered)
+                {
+                    var i = (r.PerformedDate.Year - min.Year) * 12 + r.PerformedDate.Month - min.Month;
+                    buckets[i].Counts[r.Kind] = buckets[i].Counts.GetValueOrDefault(r.Kind) + 1;
+                }
+            }
+            else
+            {
+                for (var d = min; d <= max; d = d.AddDays(1)) buckets.Add(new Bucket(d.ToString("dd MMM"), new()));
+                foreach (var r in filtered)
+                {
+                    var i = (r.PerformedDate.Date - min).Days;
+                    buckets[i].Counts[r.Kind] = buckets[i].Counts.GetValueOrDefault(r.Kind) + 1;
+                }
+            }
+            var top = buckets.Max(b => b.Total);
+            yMax = NiceMax(top);
+            labelEvery = Math.Max(1, (int)Math.Ceiling(buckets.Count / 8.0));
+        }
+    }
+
+    void SlicePage()
+    {
+        pageRows = filtered.Skip((page - 1) * PageSize).Take(PageSize).ToList();
+        first = filtered.Count == 0 ? 0 : (page - 1) * PageSize + 1;
+        last = (page - 1) * PageSize + pageRows.Count;
+    }
+
+    static int NiceMax(int v)
+    {
+        if (v <= 4) return 4;
+        var step = Math.Pow(10, Math.Floor(Math.Log10(v)));
+        foreach (var m in new[] { 1.0, 2.0, 2.5, 5.0, 10.0 }) if (m * step >= v) return (int)Math.Ceiling(m * step);
+        return v;
+    }
+
+    IEnumerable<(double Y, string Label)> GridLines()
+    {
+        for (int i = 0; i <= 4; i++) yield return (190 - 160.0 * i / 4, F(yMax * i / 4.0));
+    }
+
+    IEnumerable<int> PageWindow()
+    {
+        var start = Math.Max(1, page - 2);
+        var end = Math.Min(totalPages, start + 4);
+        start = Math.Max(1, end - 4);
+        for (int n = start; n <= end; n++) yield return n;
+    }
+
+    // <text> is a reserved word inside Razor code blocks, so the SVG text elements are written out here.
+    static MarkupString SvgText(string attributes, string text) => new($"<text {attributes}>{System.Net.WebUtility.HtmlEncode(text)}</text>");
+    static string F(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    static string KindClass(string k, bool stroke = false) => (stroke ? "cx-s-" : "cx-k-") + k switch
+    {
+        "Cleaned with reference check" => "ref",
+        "Clean only" => "clean",
+        _ => "re"
+    };
+
+    RenderFragment BarList(IEnumerable<IGrouping<string, CleaningRunRow>> groups) => builder =>
+    {
+        var rows = groups.Select(g => (Name: g.Key, N: g.Count())).OrderByDescending(x => x.N).ThenBy(x => x.Name).Take(8).ToList();
+        var max = Math.Max(1, rows.Max(x => x.N));
+        int s = 0;
+        builder.OpenElement(s++, "div"); builder.AddAttribute(s++, "class", "cx-bars");
+        foreach (var r in rows)
+        {
+            builder.OpenElement(s++, "div"); builder.AddAttribute(s++, "class", "cx-bar-row"); builder.AddAttribute(s++, "title", $"{r.Name}: {r.N}");
+            builder.OpenElement(s++, "span"); builder.AddAttribute(s++, "class", "cx-bar-name"); builder.AddContent(s++, r.Name); builder.CloseElement();
+            builder.OpenElement(s++, "span"); builder.AddAttribute(s++, "class", "cx-bar-track");
+            builder.OpenElement(s++, "i"); builder.AddAttribute(s++, "style", $"width:{F(100.0 * r.N / max)}%"); builder.CloseElement();
+            builder.CloseElement();
+            builder.OpenElement(s++, "span"); builder.AddAttribute(s++, "class", "cx-bar-n"); builder.AddContent(s++, r.N.ToString("N0")); builder.CloseElement();
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    // ---- Excel: every run that matches the filters (not just the page on screen), plus a summary sheet ----
+    async Task ExportAsync()
+    {
+        exporting = true;
+        await Task.Yield();
+        try
+        {
+            using var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add("Runs");
+            string[] heads = { "When", "Type", "File", "Data provider", "Category", "Cleaned by", "Purpose / basis" };
+            for (int c = 0; c < heads.Length; c++) ws.Cell(1, c + 1).Value = heads[c];
+            ws.Range(1, 1, 1, heads.Length).Style.Font.Bold = true;
+            int row = 2;
+            foreach (var r in filtered)
+            {
+                ws.Cell(row, 1).Value = r.PerformedDate; ws.Cell(row, 1).Style.DateFormat.Format = "dd mmm yyyy hh:mm";
+                ws.Cell(row, 2).Value = r.Kind;
+                ws.Cell(row, 3).Value = r.Filename;
+                ws.Cell(row, 4).Value = r.DataProvider;
+                ws.Cell(row, 5).Value = string.IsNullOrEmpty(r.SubCategoryCode) ? "" : CategoryLabel(r.SubCategoryCode);
+                ws.Cell(row, 6).Value = r.PerformedByEmail;
+                ws.Cell(row, 7).Value = r.Detail ?? "";
+                row++;
+            }
+            ws.SheetView.FreezeRows(1);
+            ws.Columns().AdjustToContents();
+
+            var sm = wb.Worksheets.Add("Summary");
+            int sr = 1;
+            sm.Cell(sr++, 1).Value = "Recent cleaning runs";
+            sm.Cell(1, 1).Style.Font.Bold = true;
+            sm.Cell(sr, 1).Value = "Exported"; sm.Cell(sr++, 2).Value = DateTime.Now.ToString("dd MMM yyyy HH:mm");
+            sm.Cell(sr, 1).Value = "Runs shown"; sm.Cell(sr++, 2).Value = filtered.Count;
+            sm.Cell(sr, 1).Value = "Type"; sm.Cell(sr++, 2).Value = kind;
+            sm.Cell(sr, 1).Value = "Data provider"; sm.Cell(sr++, 2).Value = string.IsNullOrEmpty(provider) ? "All" : provider;
+            sm.Cell(sr, 1).Value = "Category"; sm.Cell(sr++, 2).Value = string.IsNullOrEmpty(category) ? "All" : CategoryLabel(category);
+            sm.Cell(sr, 1).Value = "Date cleaned"; sm.Cell(sr++, 2).Value = (from, to) switch
+            {
+                (null, null) => "Any",
+                (not null, null) => $"from {from:dd MMM yyyy}",
+                (null, not null) => $"up to {to:dd MMM yyyy}",
+                _ => $"{from:dd MMM yyyy} to {to:dd MMM yyyy}"
+            };
+            if (showEveryone) { sm.Cell(sr, 1).Value = "Associate"; sm.Cell(sr++, 2).Value = string.IsNullOrEmpty(associate) ? "Everyone" : associate; }
+            sr++;
+            void Table(string title, IEnumerable<(string Name, int N)> data)
+            {
+                sm.Cell(sr, 1).Value = title; sm.Cell(sr, 1).Style.Font.Bold = true; sm.Cell(sr, 2).Value = "Runs"; sm.Cell(sr++, 2).Style.Font.Bold = true;
+                foreach (var d in data) { sm.Cell(sr, 1).Value = d.Name; sm.Cell(sr++, 2).Value = d.N; }
+                sr++;
+            }
+            Table("By type", kindOrder.Select(k => (k, filtered.Count(r => r.Kind == k))));
+            Table(byMonth ? "By month" : "By day", buckets.Select(b => (b.Label, b.Total)));
+            Table("By data provider", filtered.GroupBy(r => string.IsNullOrWhiteSpace(r.DataProvider) ? "(unknown)" : r.DataProvider).Select(g => (g.Key, g.Count())).OrderByDescending(x => x.Item2));
+            if (showEveryone) Table("By associate", filtered.GroupBy(r => r.PerformedByEmail).Select(g => (g.Key, g.Count())).OrderByDescending(x => x.Item2));
+            sm.Columns().AdjustToContents();
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            await JS.InvokeVoidAsync("downloadFile", $"CleaningRuns_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", ms.ToArray(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        }
+        finally { exporting = false; }
+    }
+}

@@ -431,3 +431,31 @@ html .cx-btn-danger:hover { background: var(--danger-bg); }
 .cx-run-filters .cx-select, .cx-run-filters .cx-input { max-width: none; width: 100%; }
 .cx-file-tag.info { background: var(--info-bg); color: var(--info); border-color: transparent; }
 .cx-file { flex-wrap: wrap; }
+
+/* ---- Recent cleaning runs page ---- */
+.cx-runs .cx-card-head { padding: 0; }
+.cx-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cx-chart-grid .cx-chart-wide { grid-column: 1 / -1; }
+@media (max-width: 900px) { .cx-chart-grid { grid-template-columns: 1fr; } }
+.cx-chart { width: 100%; height: auto; display: block; }
+.cx-donut { max-width: 240px; margin: 0 auto; }
+.cx-grid { stroke: var(--border); stroke-width: 1; }
+.cx-axis { fill: var(--muted); font-size: 11px; font-family: "IBM Plex Mono", monospace; }
+.cx-donut-n { fill: var(--text); font-size: 26px; font-weight: 600; font-family: "IBM Plex Mono", monospace; }
+.cx-k-ref { fill: var(--accent); background: var(--accent); }
+.cx-k-clean { fill: var(--info); background: var(--info); }
+.cx-k-re { fill: var(--warn); background: var(--warn); }
+.cx-s-ref { stroke: var(--accent); }
+.cx-s-clean { stroke: var(--info); }
+.cx-s-re { stroke: var(--warn); }
+.cx-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--sub); }
+.cx-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cx-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.cx-bars { display: flex; flex-direction: column; gap: 9px; }
+.cx-bar-row { display: grid; grid-template-columns: minmax(90px, 38%) 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+.cx-bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.cx-bar-track { height: 10px; border-radius: 6px; background: var(--card-2); border: 1px solid var(--border); overflow: hidden; }
+.cx-bar-track i { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
+.cx-bar-n { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; color: var(--sub); }
+.cx-pager { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; padding-top: 4px; }
+.cx-page-n[aria-current="page"] { background: color-mix(in srgb, var(--accent) 16%, var(--card)); border-color: var(--accent); font-weight: 600; }

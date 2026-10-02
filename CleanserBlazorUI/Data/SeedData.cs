@@ -43,12 +43,28 @@ public class SeedData
         await SeedDataLoggingAccessRequestReasonsAsync(dbContext);
         await SeedDataLoggingCleaningPurposeReasonsAsync(dbContext);
         await SeedNavigationAsync(dbContext);
+        await EnsureRecentRunsNavItemAsync(dbContext);
     }
 
     // Initial sidebar layout -- every existing page assigned to the section
     // it belongs to. Purely a starting point: admin can rename sections and
     // drag items between them afterward (NavigationSettings.razor), and this
     // never re-runs once a NavSection exists.
+    // Adds the "Recent Cleaning Runs" sidebar entry (Data Cleaning section) to a sidebar that was created before this page existed.
+    private static async Task EnsureRecentRunsNavItemAsync(ApplicationDbContext context)
+    {
+        if (await context.NavItems.AnyAsync(i => i.Href == "recent-cleaning-runs")) return;
+        var section = await context.NavSections.FirstOrDefaultAsync(x => x.Title == "Data Cleaning");
+        if (section == null) return;
+        var maxOrder = await context.NavItems.Where(i => i.NavSectionId == section.Id).Select(i => (int?)i.DisplayOrder).MaxAsync() ?? 0;
+        // directly under "Data Cleaning" (the first entry), ahead of the admin pages
+        var after = await context.NavItems.Where(i => i.NavSectionId == section.Id && i.Href == "").Select(i => (int?)i.DisplayOrder).FirstOrDefaultAsync();
+        var order = after != null ? after.Value + 1 : maxOrder + 1;
+        foreach (var i in await context.NavItems.Where(i => i.NavSectionId == section.Id && i.DisplayOrder >= order).ToListAsync()) i.DisplayOrder++;
+        context.NavItems.Add(new NavItem { NavSectionId = section.Id, Label = "Recent Cleaning Runs", Href = "recent-cleaning-runs", IconKey = "History", RequiredRoles = null, DisplayOrder = order });
+        await context.SaveChangesAsync();
+    }
+
     private static async Task SeedNavigationAsync(ApplicationDbContext context)
     {
         if (await context.NavSections.AnyAsync()) return;
@@ -69,6 +85,7 @@ public class SeedData
             (accounts, "Manage Users", "Manageroles", "Group", "admin"),
 
             (dataCleaning, "Data Cleaning", "", "CleaningServices", null),
+            (dataCleaning, "Recent Cleaning Runs", "recent-cleaning-runs", "History", null),
             (dataCleaning, "Add Business Names", "Businessnames", "Business", "admin"),
             (dataCleaning, "Business Name Mapping", "Business-names-normalizer", "Rule", "admin"),
             (dataCleaning, "Schedule Automatic Cleanup", "schedule-automatic-cleanup", "Schedule", "admin"),
