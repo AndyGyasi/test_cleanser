@@ -59,6 +59,18 @@
         update();
     }
 
+    // Sign-in style forms: show a spinner and block a second click while the request is in flight.
+    document.addEventListener("submit", function (e) {
+        const form = e.target.closest(".cx-auth-form");
+        const btn = form && form.querySelector('button[type="submit"].cx-btn');
+        if (!btn || btn.getAttribute("aria-busy") === "true") return;
+        setTimeout(function () { btn.setAttribute("aria-busy", "true"); }, 0);
+    });
+    // Coming back with the browser's Back button must not leave the button stuck in its busy state.
+    window.addEventListener("pageshow", function (e) {
+        if (e.persisted) document.querySelectorAll('.cx-btn[aria-busy="true"]').forEach(function (b) { b.removeAttribute("aria-busy"); });
+    });
+
     function boot() { document.querySelectorAll("[data-cx-pwform]").forEach(initForm); }
 
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
