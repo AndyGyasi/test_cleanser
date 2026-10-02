@@ -27,26 +27,49 @@ public class DataManagementService
 
     private async Task<List<T>> LoadReferenceRowsForKeysAsync<T>(DbSet<T> set, string subscriberCode, IEnumerable<string> accountKeys, IEnumerable<string> customerKeys) where T : class
     {
-        var accts = accountKeys.Where(k => !string.IsNullOrWhiteSpace(k)).Distinct().ToList();
-        var custs = customerKeys.Where(k => !string.IsNullOrWhiteSpace(k)).Distinct().ToList();
+        var accts = accountKeys.Where(k => !string.IsNullOrWhiteSpace(k) && k.Length <= 450).Distinct().ToList();
+        var custs = customerKeys.Where(k => !string.IsNullOrWhiteSpace(k) && k.Length <= 450).Distinct().ToList();
         if (accts.Count == 0 && custs.Count == 0) return new List<T>();
 
         var entity = _context.Model.FindEntityType(typeof(T))!;
         var table = $"[{entity.GetSchema() ?? "dbo"}].[{entity.GetTableName()}]";
         var acctExpr = "UPPER(" + string.Format(SqlStrip, "t.CreditFacilityAccNum") + ")";
+        // The file's keys go into a temporary table on the same connection and the query joins to it. (Not
+        // OPENJSON or STRING_SPLIT: older SQL Server versions and databases set to an older compatibility
+        // level do not have them, and the run failed with "Invalid object name 'OPENJSON'".)
         var sql = $@"SELECT t.* FROM {table} t
 CROSS APPLY (SELECT c = UPPER({string.Format(SqlStrip, "t.CustomerID")})) x
 WHERE t.SubscriberCode = {{0}} AND (
-    {acctExpr} IN (SELECT [value] FROM OPENJSON({{1}}))
+    {acctExpr} IN (SELECT K FROM #RefKeys WHERE Kind = 'A')
     OR (CASE WHEN x.c = '' THEN ''
              WHEN x.c NOT LIKE '%[^0-9]%' THEN (CASE WHEN PATINDEX('%[^0]%', x.c) = 0 THEN '0' ELSE SUBSTRING(x.c, PATINDEX('%[^0]%', x.c), 4000) END)
-             ELSE x.c END) IN (SELECT [value] FROM OPENJSON({{2}})))";
+             ELSE x.c END) IN (SELECT K FROM #RefKeys WHERE Kind = 'C'))";
 
-        return await set.FromSqlRaw(sql, subscriberCode,
-                System.Text.Json.JsonSerializer.Serialize(accts),
-                System.Text.Json.JsonSerializer.Serialize(custs))
-            .AsNoTracking()
-            .ToListAsync();
+        var keys = new System.Data.DataTable();
+        keys.Columns.Add("Kind", typeof(string));
+        keys.Columns.Add("K", typeof(string));
+        foreach (var k in accts) keys.Rows.Add("A", k);
+        foreach (var k in custs) keys.Rows.Add("C", k);
+
+        await _context.Database.OpenConnectionAsync();   // keeps one connection so the temporary table is visible to the query
+        try
+        {
+            // COLLATE DATABASE_DEFAULT: the temporary table lives in tempdb, which can have a different collation
+            await _context.Database.ExecuteSqlRawAsync("CREATE TABLE #RefKeys (Kind char(1) NOT NULL, K nvarchar(450) COLLATE DATABASE_DEFAULT NOT NULL, PRIMARY KEY (Kind, K))");
+            var conn = (Microsoft.Data.SqlClient.SqlConnection)_context.Database.GetDbConnection();
+            using (var bulk = new Microsoft.Data.SqlClient.SqlBulkCopy(conn) { DestinationTableName = "#RefKeys", BulkCopyTimeout = 120 })
+            {
+                bulk.ColumnMappings.Add("Kind", "Kind");
+                bulk.ColumnMappings.Add("K", "K");
+                await bulk.WriteToServerAsync(keys);
+            }
+            return await set.FromSqlRaw(sql, subscriberCode).AsNoTracking().ToListAsync();
+        }
+        finally
+        {
+            try { await _context.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS #RefKeys"); } catch { /* the connection is closing anyway */ }
+            await _context.Database.CloseConnectionAsync();
+        }
     }
 
     public async Task<List<IndividualRef>> GETReferenceDataForRecords_IND(string fileShortName, IEnumerable<string> accountKeys, IEnumerable<string> customerKeys)
