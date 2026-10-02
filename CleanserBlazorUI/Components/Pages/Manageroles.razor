@@ -78,7 +78,8 @@ else if (!string.IsNullOrWhiteSpace(Registered))
             </span>
             <span class="cx-control">
                 <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V8a4 4 0 018 0v3" /></svg>
-                <InputText id="reset-password" @bind-Value="ResetInput.Password" type="text" autocomplete="off" readonly="@resetDone" />
+                <InputText id="reset-password" @bind-Value="ResetInput.Password" type="@(resetRevealed ? "text" : "password")" autocomplete="off" readonly="@resetDone" />
+                <button type="button" class="cx-icon-btn cx-eye" @onclick="() => resetRevealed = !resetRevealed" aria-pressed="@(resetRevealed ? "true" : "false")" aria-label="@(resetRevealed ? "Hide password" : "Show password")" title="@(resetRevealed ? "Hide" : "Show")"><svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z" /></svg></button>
                 <button type="button" class="cx-icon-btn cx-eye" data-cx="copy" data-target="reset-password" aria-label="Copy password" title="Copy"><svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v11H9zM5 15V4h10" /></svg></button>
             </span>
             <ValidationMessage For="() => ResetInput.Password" class="cx-error" />
@@ -236,6 +237,8 @@ else if (!string.IsNullOrWhiteSpace(Registered))
     private UserRow? resetting;
     private ApplicationUser? resetUser;
     private bool resetDone;
+    // The reset box opens with a generated password the admin has to read out, so it starts visible; the eye hides it.
+    private bool resetRevealed = true;
     private ResetModel ResetInput = new();
     private string myEmail = "";
     private UserRow? pendingDelete;
@@ -327,10 +330,11 @@ else if (!string.IsNullOrWhiteSpace(Registered))
         resetUser = null;
         resetDone = false;
         ResetInput = new ResetModel { Password = TemporaryPassword.Generate() };
+        resetRevealed = true;
         statusMessage = null;
     }
 
-    private void GenerateReset() => ResetInput.Password = TemporaryPassword.Generate();
+    private void GenerateReset() { ResetInput.Password = TemporaryPassword.Generate(); resetRevealed = true; }
 
     private void CloseReset()
     {
