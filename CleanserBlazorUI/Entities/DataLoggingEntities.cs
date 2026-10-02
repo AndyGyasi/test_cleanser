@@ -63,9 +63,17 @@ public class DataProviderOption
     public string SubName { get; set; } = string.Empty;
     public string? CategoryDescription { get; set; }
 
-    public string DisplayLabel => !string.IsNullOrWhiteSpace(CategoryDescription)
-        ? $"{SubName} ({ShortName}) — {CategoryDescription}"
-        : $"{SubName} ({ShortName})";
+    // Data Provider choices are named by the SubName field of Subscriber.Subscribers.
+    public string DisplayLabel => !string.IsNullOrWhiteSpace(SubName) ? SubName : ShortName;
+}
+
+/// <summary>A subscriber as read live from XDSDataLogDB: ShortName = code, SubName = name,
+/// InstitutionType = the category description (Subscriber.SubscriberCategory.CatDescription).</summary>
+public class SubscriberInfo
+{
+    public string SubscriberCode { get; set; } = string.Empty;
+    public string SubscriberName { get; set; } = string.Empty;
+    public string InstitutionType { get; set; } = string.Empty;
 }
 
 // Editable wording for the Data Logging ownership gate. Singleton row

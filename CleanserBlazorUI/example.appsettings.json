@@ -1,6 +1,7 @@
 {
   "ConnectionStrings": {
   "DefaultConnection": "Server=XDSDATAADDY;Database=NewCleaserDB;Trusted_Connection=True;Multiple Active Result Sets=True;Encrypt=True;Trust Server Certificate=True;Command Timeout=0",
+  "XdsDataLogDbConnection": "Server=<mother-database-server>;Database=XDSDataLogDB;User Id=<user>;Password=<password>;MultipleActiveResultSets=true;TrustServerCertificate=True;",
   "SubscriberConnection": "Server=XDSDATAADDY;Database=NewCleaserDB;Trusted_Connection=True;Multiple Active Result Sets=True;Encrypt=True;Trust Server Certificate=True;Command Timeout=0"
   },
   "Logging": {
@@ -21,6 +22,6 @@
   "AllowedHosts": "*"
 }
 //rename "example.appsettings.json" to  "appsettings.json"
-// SubscriberConnection removed: subscriber short codes now live in
-// SubscriberShortCodes (ApplicationDbContext/DefaultConnection), migrated
-// off the old separate "blazor-CleanserAppDB" database.
+// Subscriber names, codes and categories are read LIVE from XDSDataLogDB (Subscriber.Subscribers and
+// Subscriber.SubscriberCategory) through "XdsDataLogDbConnection" above. The app only reads that database;
+// it never creates, changes or deletes anything in it. No local copy of the subscriber list is kept.

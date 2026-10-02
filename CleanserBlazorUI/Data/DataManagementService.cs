@@ -848,17 +848,25 @@ WHERE t.SubscriberCode = {{0}} AND (
         string specificShortCode = shortCodes.FirstOrDefault(s => s == _shortname) ?? string.Empty;
         return specificShortCode;
     }
-    // Reads from the same EF-managed database as everything else now
-    // (see ApplicationDbContext.SubscriberShortCodes) -- previously raw
-    // ADO.NET against a separate, unmigrated "blazor-CleanserAppDB".
-    // Method name/signature/return shape unchanged so every caller
-    // (GetSubscriberUserInfosShotCode, GetSubscriberShortCode, etc.)
-    // keeps working without modification.
+    // Reads the subscriber list LIVE from XDSDataLogDB (Subscriber.Subscribers), so a subscriber added or
+    // changed there is recognised at once. Nothing is copied into this app's own database. The list keeps
+    // the older SubscribeContext shape so every existing caller works unchanged.
     public async Task<List<SubscribeContext>> GetShortCodeFromSubscribeIDAsync()
     {
         try
         {
-            return await _context.SubscriberShortCodes.ToListAsync();
+            return await _xdsDataLogDbContext.Subscribers
+                .Where(s => s.ShortName != null && s.ShortName != "")
+                .AsNoTracking()
+                .Select(s => new SubscribeContext
+                {
+                    ShortName = s.ShortName!,
+                    SubName = s.SubName,
+                    SubCode = s.SubCode,
+                    SubXDSCode = s.SubXDSCode,
+                    SubCategoryCode = s.SubCategoryCode ?? string.Empty
+                })
+                .ToListAsync();
         }
         catch (Exception)
         {
@@ -1101,40 +1109,27 @@ WHERE t.SubscriberCode = {{0}} AND (
         return settingAsAnArray;
     }
 
-    // ── Unloadable Log: subscriber profile lookup (Name + Institution Type) ──
-    // Filled in once per subscriber via the log-generation dialog, reused
-    // automatically on every subsequent log for that same subscriber code.
-    public async Task<SubscriberProfile?> GetSubscriberProfileAsync(string subscriberCode)
+    // ── Unloadable Log: subscriber name + institution type, LIVE from XDSDataLogDB ──
+    // Name = Subscriber.Subscribers.SubName; institution type = the category description
+    // (Subscriber.SubscriberCategory.CatDescription). Nothing is stored locally.
+    public async Task<SubscriberInfo?> GetSubscriberProfileAsync(string subscriberCode)
     {
         if (string.IsNullOrWhiteSpace(subscriberCode)) return null;
-        return await _context.SubscriberProfiles
-            .FirstOrDefaultAsync(p => p.SubscriberCode == subscriberCode);
-    }
-
-    public async Task SaveSubscriberProfileAsync(string subscriberCode, string subscriberName, string institutionType)
-    {
-        if (string.IsNullOrWhiteSpace(subscriberCode)) return;
-
-        var existing = await _context.SubscriberProfiles
-            .FirstOrDefaultAsync(p => p.SubscriberCode == subscriberCode);
-
-        if (existing != null)
+        var code = subscriberCode.Trim();
+        var sub = await _xdsDataLogDbContext.Subscribers.AsNoTracking()
+            .Where(x => x.ShortName == code)
+            .Select(x => new { x.ShortName, x.SubName, x.SubCategoryCode })
+            .FirstOrDefaultAsync();
+        if (sub == null) return null;
+        string? category = null;
+        if (!string.IsNullOrWhiteSpace(sub.SubCategoryCode))
         {
-            existing.SubscriberName = subscriberName;
-            existing.InstitutionType = institutionType;
-            existing.LastUpdatedDate = DateTime.Now;
+            category = await _xdsDataLogDbContext.SubscriberCategories.AsNoTracking()
+                .Where(c => c.SubCategoryCode == sub.SubCategoryCode)
+                .Select(c => c.CatDescription)
+                .FirstOrDefaultAsync();
         }
-        else
-        {
-            _context.SubscriberProfiles.Add(new SubscriberProfile
-            {
-                SubscriberCode = subscriberCode,
-                SubscriberName = subscriberName,
-                InstitutionType = institutionType,
-                LastUpdatedDate = DateTime.Now
-            });
-        }
-        await _context.SaveChangesAsync();
+        return new SubscriberInfo { SubscriberCode = sub.ShortName ?? code, SubscriberName = sub.SubName ?? string.Empty, InstitutionType = category ?? string.Empty };
     }
 
     // ── Unloadable Log: persist header + message/category detail ────────────
@@ -1142,16 +1137,10 @@ WHERE t.SubscriberCode = {{0}} AND (
     // is unchanged. This is what turns each one-off log into a queryable row
     // in the running history across all subscribers.
     //
-    // Guarantees a SubscriberProfile row exists (FK requires it) regardless of
-    // whether the "save subscriber info" checkbox was checked -- that checkbox
-    // only governs whether typed name/institution type *overwrite* an existing
-    // profile (handled separately by SaveSubscriberProfileAsync). Here we only
-    // create a minimal profile if one is missing; we never overwrite one that
-    // already exists, since that's not this method's job.
+    // The header keeps only the subscriber's short code; the name and institution type are read live
+    // from XDSDataLogDB when the log is shown.
     public async Task<int> SaveUnloadableLogAsync(
         string subscriberCode,
-        string subscriberName,
-        string institutionType,
         UnloadableLogService.UnloadableLogHeader header,
         List<UnloadableLogService.MessageRejectionSummary> messageSummaries,
         List<(string TopLevelCategory, List<UnloadableLogService.CategoryRejectionSummary> Items)> categorySummaries)
@@ -1159,25 +1148,9 @@ WHERE t.SubscriberCode = {{0}} AND (
         if (string.IsNullOrWhiteSpace(subscriberCode))
             throw new ArgumentException("Subscriber code is required to save the Unloadable Log.", nameof(subscriberCode));
 
-        var profile = await _context.SubscriberProfiles
-            .FirstOrDefaultAsync(p => p.SubscriberCode == subscriberCode);
-
-        if (profile == null)
-        {
-            profile = new SubscriberProfile
-            {
-                SubscriberCode = subscriberCode,
-                SubscriberName = subscriberName,
-                InstitutionType = institutionType,
-                LastUpdatedDate = DateTime.Now
-            };
-            _context.SubscriberProfiles.Add(profile);
-            await _context.SaveChangesAsync(); // need profile.Id before the header can reference it
-        }
-
         var logHeader = new UnloadableLogHeader
         {
-            SubscriberProfileId = profile.Id,
+            SubscriberCode = subscriberCode.Trim(),
             Associate = header.Associate,
             Filename = header.Filename,
             NumberOfRecords = header.NumberOfRecords,
@@ -1227,27 +1200,48 @@ WHERE t.SubscriberCode = {{0}} AND (
     // DbContext), and without clearing, re-fetching a header already tracked
     // from a prior search throws "instance ... already being tracked" --
     // the same class of bug already hit once in the upload flow.
-    public async Task<List<UnloadableLogHeader>> GetUnloadableLogHeadersAsync(string? logYear = null, string? dataType = null, int? subscriberProfileId = null)
+    public async Task<List<UnloadableLogHeader>> GetUnloadableLogHeadersAsync(string? logYear = null, string? dataType = null, string? subscriberCode = null)
     {
         _context.ChangeTracker.Clear();
 
-        var query = _context.UnloadableLogHeaders
-            .Include(h => h.SubscriberProfile)
-            .AsQueryable();
+        var query = _context.UnloadableLogHeaders.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(logYear))
             query = query.Where(h => h.LogYear == logYear);
         if (!string.IsNullOrWhiteSpace(dataType))
             query = query.Where(h => h.DataType == dataType);
-        if (subscriberProfileId.HasValue)
-            query = query.Where(h => h.SubscriberProfileId == subscriberProfileId.Value);
+        if (!string.IsNullOrWhiteSpace(subscriberCode))
+            query = query.Where(h => h.SubscriberCode == subscriberCode);
 
-        return await query.OrderByDescending(h => h.CreatedDate).ToListAsync();
+        var headers = await query.OrderByDescending(h => h.CreatedDate).ToListAsync();
+
+        // names and institution types come live from XDSDataLogDB
+        var byCode = (await GetAllSubscriberProfilesAsync()).ToDictionary(x => x.SubscriberCode, StringComparer.OrdinalIgnoreCase);
+        foreach (var h in headers)
+        {
+            if (byCode.TryGetValue(h.SubscriberCode ?? string.Empty, out var info))
+            {
+                h.SubscriberName = info.SubscriberName;
+                h.InstitutionType = info.InstitutionType;
+            }
+        }
+        return headers;
     }
 
-    public async Task<List<SubscriberProfile>> GetAllSubscriberProfilesAsync()
+    // Every subscriber, live from Subscriber.Subscribers (name from SubName, institution type from the category).
+    public async Task<List<SubscriberInfo>> GetAllSubscriberProfilesAsync()
     {
-        return await _context.SubscriberProfiles.OrderBy(p => p.SubscriberName).ToListAsync();
+        var categories = await GetSubscriberCategoryLookupAsync();
+        var subs = await _xdsDataLogDbContext.Subscribers.AsNoTracking()
+            .Where(s => s.ShortName != null && s.ShortName != "")
+            .Select(s => new { s.ShortName, s.SubName, s.SubCategoryCode })
+            .ToListAsync();
+        return subs.Select(s => new SubscriberInfo
+        {
+            SubscriberCode = s.ShortName!,
+            SubscriberName = s.SubName ?? string.Empty,
+            InstitutionType = !string.IsNullOrWhiteSpace(s.SubCategoryCode) && categories.TryGetValue(s.SubCategoryCode, out var d) ? d : string.Empty
+        }).GroupBy(x => x.SubscriberCode, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).OrderBy(x => x.SubscriberName).ToList();
     }
 
     // Looks up which associate a given uploaded filename was logged/assigned

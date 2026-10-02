@@ -161,17 +161,16 @@
                 <div class="cx-alert info"><span>
                     Creates the unloadable log's header row and the demographic / financial rejection tables for the file just cleaned
                     (@((_lastUnlDataType == "BUS" ? _lastUnlBatchBus?.Count : _lastUnlBatchInd?.Count) ?? 0) unloadable records).
-                    Subscriber name and institution type are filled in once per subscriber and remembered after that.
+                    Subscriber name and institution type come from the subscriber record in XDSDataLogDB.
                     Date emailed and date fixed are left blank for you to fill in.</span>
                 </div>
                 <div class="cx-form-grid">
                     <label class="cx-field">Associate<input class="cx-input" @bind="UnlLogAssociate" /></label>
-                    <label class="cx-field">Subscriber name<input class="cx-input" @bind="UnlLogSubscriberName" /></label>
-                    <label class="cx-field">Institution type<input class="cx-input" @bind="UnlLogInstitutionType" /></label>
+                    <label class="cx-field">Subscriber name<input class="cx-input" value="@UnlLogSubscriberName" readonly /></label>
+                    <label class="cx-field">Institution type<input class="cx-input" value="@UnlLogInstitutionType" readonly /></label>
                 </div>
                 <label class="cx-field">Comments<textarea class="cx-input" rows="2" @bind="UnlLogComments"></textarea></label>
                 <div class="cx-actions">
-                    <label class="cx-check"><input type="checkbox" @bind="UnlLogSaveSubscriberInfo" /> <span>Remember subscriber name and institution type for next time</span></label>
                     <span class="cx-spacer"></span>
                     <button type="button" class="cx-btn cx-btn-primary" @onclick="GenerateUnloadableLogClicked">Generate unloadable log</button>
                 </div>
@@ -267,7 +266,6 @@
     string UnlLogSubscriberName = string.Empty;
     string UnlLogInstitutionType = string.Empty;
     string UnlLogComments = string.Empty;
-    bool UnlLogSaveSubscriberInfo = true;
     int _unlLogSerialCounter = 0;
     MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;
     string AlertSeverityMessage;
@@ -436,11 +434,6 @@
             return;
         }
 
-        if (UnlLogSaveSubscriberInfo && !string.IsNullOrWhiteSpace(_lastUnlSubcode))
-        {
-            await DataManagementService.SaveSubscriberProfileAsync(_lastUnlSubcode, UnlLogSubscriberName, UnlLogInstitutionType);
-        }
-
         _unlLogSerialCounter++;
         string reasonSummary = isBusiness
             ? UnloadableLogService.BuildUnloadableReasonSummary(_lastUnlBatchBus)
@@ -499,7 +492,7 @@
                 };
 
             await DataManagementService.SaveUnloadableLogAsync(
-                _lastUnlSubcode, UnlLogSubscriberName, UnlLogInstitutionType,
+                _lastUnlSubcode,
                 header, messageSummaries, categorySummaries);
         }
         catch (Exception ex)

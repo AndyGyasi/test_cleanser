@@ -9,10 +9,8 @@ namespace CleanserBlazorUI.Entities;
 /// alongside it so the log becomes a queryable running history across all
 /// 200+ subscribers instead of a folder of one-off spreadsheets.
 ///
-/// FK's to SubscriberProfile rather than duplicating SubscriberCode/Name/
-/// InstitutionType here -- those already live in one place (kept current by
-/// SaveSubscriberProfileAsync) and this avoids the same institution's name
-/// drifting across hundreds of header rows if it's ever corrected.
+/// Keeps only the subscriber's short code; the name and institution type come live from XDSDataLogDB
+/// (Subscriber.Subscribers / Subscriber.SubscriberCategory), so a correction there shows here at once.
 ///
 /// SerialNo from the old in-memory _unlLogSerialCounter is intentionally
 /// dropped: that counter reset on every app restart and was never a stable
@@ -22,9 +20,12 @@ public class UnloadableLogHeader
 {
     public int Id { get; set; }
 
-    public int SubscriberProfileId { get; set; }
-    [ForeignKey(nameof(SubscriberProfileId))]
-    public SubscriberProfile? SubscriberProfile { get; set; }
+    // The subscriber's short code (the part of the file name before the date, e.g. "LEA"). Name and
+    // institution type are NOT stored: they are read live from Subscriber.Subscribers / SubscriberCategory
+    // in XDSDataLogDB whenever the log is shown.
+    public string SubscriberCode { get; set; } = string.Empty;
+    [NotMapped] public string SubscriberName { get; set; } = string.Empty;
+    [NotMapped] public string InstitutionType { get; set; } = string.Empty;
 
     public string Associate { get; set; } = string.Empty;
     public string Filename { get; set; } = string.Empty;

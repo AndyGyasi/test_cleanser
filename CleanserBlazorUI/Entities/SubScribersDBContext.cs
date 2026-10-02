@@ -436,16 +436,6 @@ public class SettingsClass
     public string? Value { get; set; } = string.Empty;
     public SettingsDataType DataType { get; set; }
 }
-public class SubscriberProfile
-{
-    public int Id { get; set; }
-    // Matches the short code derived from filenames (GetFileShortCodeFromFileName),
-    // e.g. "ADB", "UMB" -- set once per subscriber, reused on every log generated after.
-    public string SubscriberCode { get; set; } = string.Empty;
-    public string SubscriberName { get; set; } = string.Empty;
-    public string InstitutionType { get; set; } = string.Empty;
-    public DateTime LastUpdatedDate { get; set; }
-}
 public class BusSettNormalizer
 {
     public int Id { get; set; }

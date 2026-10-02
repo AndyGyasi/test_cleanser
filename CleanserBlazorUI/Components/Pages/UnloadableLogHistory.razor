@@ -27,10 +27,10 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="4" md="4">
-                <MudSelect T="int?" Label="Subscriber" Value="selectedSubscriberId" ValueChanged="OnSubscriberChanged" Clearable="true">
+                <MudSelect T="string" Label="Subscriber" Value="selectedSubscriberCode" ValueChanged="OnSubscriberChanged" Clearable="true">
                     @foreach (var profile in subscriberProfiles)
                     {
-                        <MudSelectItem T="int?" Value="@profile.Id">@profile.SubscriberName (@profile.SubscriberCode)</MudSelectItem>
+                        <MudSelectItem T="string" Value="@profile.SubscriberCode">@profile.SubscriberName (@profile.SubscriberCode)</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
@@ -44,11 +44,11 @@
                      CommittedItemChanges="OnCommittedItemChanges"
                      Filterable="true" SortMode="SortMode.Multiple" Bordered="true" Striped="true" Dense="true">
             <Columns>
-                <PropertyColumn Property="x => x.SubscriberProfile!.SubscriberName" Title="Subscriber" ReadOnly="true">
-                    <CellTemplate>@context.Item.SubscriberProfile?.SubscriberName</CellTemplate>
+                <PropertyColumn Property="x => x.SubscriberName" Title="Subscriber" ReadOnly="true">
+                    <CellTemplate>@context.Item.SubscriberName</CellTemplate>
                 </PropertyColumn>
-                <PropertyColumn Property="x => x.SubscriberProfile!.SubscriberCode" Title="Subcode" ReadOnly="true">
-                    <CellTemplate>@context.Item.SubscriberProfile?.SubscriberCode</CellTemplate>
+                <PropertyColumn Property="x => x.SubscriberCode" Title="Subcode" ReadOnly="true">
+                    <CellTemplate>@context.Item.SubscriberCode</CellTemplate>
                 </PropertyColumn>
                 <PropertyColumn Property="x => x.DataType" Title="Type" ReadOnly="true">
                     <CellTemplate>@context.Item.DataType</CellTemplate>
@@ -217,13 +217,13 @@
     private string AlertSeverityMessage = string.Empty;
 
     private List<UnloadableLogHeader> logs = new();
-    private List<SubscriberProfile> subscriberProfiles = new();
+    private List<SubscriberInfo> subscriberProfiles = new();
     private List<string> availableYears = new();
     private bool isLoading = true;
 
     private string? selectedYear;
     private string? selectedDataType;
-    private int? selectedSubscriberId;
+    private string? selectedSubscriberCode;
 
     // ── Dashboard state ──────────────────────────────────────────────────
     private string? dashboardYear;
@@ -264,9 +264,9 @@
         await ApplyFiltersAsync();
     }
 
-    private async Task OnSubscriberChanged(int? value)
+    private async Task OnSubscriberChanged(string? value)
     {
-        selectedSubscriberId = value;
+        selectedSubscriberCode = value;
         await ApplyFiltersAsync();
     }
 
@@ -274,7 +274,7 @@
     {
         isLoading = true;
         StateHasChanged();
-        logs = await DataManagementService.GetUnloadableLogHeadersAsync(selectedYear, selectedDataType, selectedSubscriberId);
+        logs = await DataManagementService.GetUnloadableLogHeadersAsync(selectedYear, selectedDataType, selectedSubscriberCode);
         isLoading = false;
         StateHasChanged();
     }
@@ -283,7 +283,7 @@
     {
         selectedYear = null;
         selectedDataType = null;
-        selectedSubscriberId = null;
+        selectedSubscriberCode = null;
         await ApplyFiltersAsync();
     }
 

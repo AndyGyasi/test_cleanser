@@ -30,19 +30,19 @@ public class XdsDataLogDbContext(DbContextOptions<XdsDataLogDbContext> options) 
         builder.Entity<RingUser>(e =>
         {
             e.HasNoKey();
-            e.ToSqlQuery("SELECT CAST(UserID AS nvarchar(100)) AS UserID, CAST(Email AS nvarchar(500)) AS Email FROM [Ring].[Users]");
+            e.ToSqlQuery("SELECT LTRIM(RTRIM(CAST(UserID AS nvarchar(100)))) AS UserID, LTRIM(RTRIM(CAST(Email AS nvarchar(500)))) AS Email FROM [Ring].[Users]");
         });
 
         builder.Entity<Subscriber>(e =>
         {
             e.HasNoKey();
-            e.ToSqlQuery("SELECT CAST(ShortName AS nvarchar(100)) AS ShortName, CAST(SubName AS nvarchar(500)) AS SubName, CAST(SubCode AS nvarchar(100)) AS SubCode, CAST(SubXDSCode AS nvarchar(100)) AS SubXDSCode, CAST(SubCategoryCode AS nvarchar(100)) AS SubCategoryCode FROM [Subscriber].[Subscribers]");
+            e.ToSqlQuery("SELECT LTRIM(RTRIM(CAST(ShortName AS nvarchar(100)))) AS ShortName, LTRIM(RTRIM(CAST(SubName AS nvarchar(500)))) AS SubName, LTRIM(RTRIM(CAST(SubCode AS nvarchar(100)))) AS SubCode, LTRIM(RTRIM(CAST(SubXDSCode AS nvarchar(100)))) AS SubXDSCode, LTRIM(RTRIM(CAST(SubCategoryCode AS nvarchar(100)))) AS SubCategoryCode FROM [Subscriber].[Subscribers]");
         });
 
         builder.Entity<SubscriberCategory>(e =>
         {
             e.HasNoKey();
-            e.ToSqlQuery("SELECT CAST(SubCategoryCode AS nvarchar(100)) AS SubCategoryCode, CAST(CatShortName AS nvarchar(200)) AS CatShortName, CAST(CatDescription AS nvarchar(500)) AS CatDescription FROM [Subscriber].[SubscriberCategory]");
+            e.ToSqlQuery("SELECT LTRIM(RTRIM(CAST(SubCategoryCode AS nvarchar(100)))) AS SubCategoryCode, LTRIM(RTRIM(CAST(CatShortName AS nvarchar(200)))) AS CatShortName, LTRIM(RTRIM(CAST(CatDescription AS nvarchar(500)))) AS CatDescription FROM [Subscriber].[SubscriberCategory]");
         });
     }
 }
