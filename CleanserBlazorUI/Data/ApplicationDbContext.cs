@@ -23,6 +23,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<NavSection> NavSections { get; set; }
     public DbSet<NavItem> NavItems { get; set; }
     public DbSet<SessionSettings> SessionSettings { get; set; }
+    public DbSet<PasswordResetRequest> PasswordResetRequests { get; set; }
     // Moved from a separate, unmigrated "blazor-CleanserAppDB" database
     // (raw ADO.NET against [Subscriber].[Subscribers], no schema tracking)
     // into this EF-managed one. See GetShortCodeFromSubscribeIDAsync.

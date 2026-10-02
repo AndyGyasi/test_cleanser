@@ -7,6 +7,7 @@
 @using CleanserBlazorUI.Services
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject PasswordResetRequestService Requests
 @attribute [Authorize(Roles = "admin")]
 
 <PageTitle>Manage users · Cleanser</PageTitle>
@@ -41,6 +42,14 @@
 else if (!string.IsNullOrWhiteSpace(Registered))
 {
     <div class="cx-alert ok" role="status" style="margin-bottom:18px">Account created for @Registered. Give them the temporary password yourself (it is not emailed). It works for @((int)TemporaryPassword.Lifetime.TotalDays) days, and they choose their own the first time they sign in.</div>
+}
+
+@if (rows.Count(r => r.RequestedUtc is not null) is var askedCount and > 0)
+{
+    <div class="cx-alert warn" role="status" style="margin-bottom:18px"><span>
+        <strong>@askedCount @(askedCount == 1 ? "person has" : "people have") asked for a password reset.</strong>
+        They are at the top of the list. Use <strong>Reset password</strong> to give them a temporary password, or dismiss the request.
+    </span></div>
 }
 
 @if (resetting is not null)
@@ -177,14 +186,22 @@ else if (!string.IsNullOrWhiteSpace(Registered))
                             </td>
                             <td>
                                 <span class="cx-pill @row.StatusTone">@row.Status</span>
+                                @if (row.RequestedUtc is not null)
+                                {
+                                    <span class="cx-pill info">Reset requested</span>
+                                }
                                 @if (row.Hint is not null)
                                 {
                                     <div class="cx-hint" style="margin-top:4px">@row.Hint</div>
                                 }
+                                @if (row.RequestedUtc is { } requestedAt)
+                                {
+                                    <div class="cx-hint" style="margin-top:4px">Asked @Ago(requestedAt) &middot; <button type="button" class="cx-linkbtn" @onclick="() => DismissRequestAsync(row)">Dismiss</button></div>
+                                }
                             </td>
                             <td class="cx-row-actions">
                                 <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@row.IsProtected" @onclick="() => StartEdit(row)">Edit role</button>
-                                <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@(row.IsProtected || row.IsMe)" title="@(row.IsMe ? "Change your own password under My account" : null)" @onclick="() => StartReset(row)">Reset password</button>
+                                <button type="button" class="cx-btn @(row.RequestedUtc is not null ? "cx-btn-primary" : "cx-btn-ghost") cx-btn-sm" disabled="@(row.IsProtected || row.IsMe)" title="@(row.IsMe ? "Change your own password under My account" : null)" @onclick="() => StartReset(row)">Reset password</button>
                                 <button type="button" class="cx-btn cx-btn-danger cx-btn-sm" disabled="@row.IsProtected" @onclick="() => DeleteAsync(row)">Delete</button>
                             </td>
                         </tr>
@@ -233,12 +250,15 @@ else if (!string.IsNullOrWhiteSpace(Registered))
     private async Task LoadAsync()
     {
         var users = await UserManager.Users.OrderBy(u => u.Email).ToListAsync();
+        var asked = (await Requests.OpenAsync()).ToDictionary(r => r.UserId, r => r.RequestedUtc);
         var loaded = new List<UserRow>();
         foreach (var user in users)
         {
             var roles = (await UserManager.GetRolesAsync(user)).ToList();
             loaded.Add(new UserRow
             {
+                Id = user.Id,
+                RequestedUtc = asked.TryGetValue(user.Id, out var when) ? when : null,
                 Email = user.Email ?? user.UserName ?? "",
                 Roles = roles.Where(r => !IsMustChange(r)).ToList(),
                 Pending = roles.Any(IsMustChange),
@@ -247,7 +267,7 @@ else if (!string.IsNullOrWhiteSpace(Registered))
                 IsMe = string.Equals(user.Email, myEmail, StringComparison.OrdinalIgnoreCase)
             });
         }
-        rows = loaded;
+        rows = loaded.OrderByDescending(r => r.RequestedUtc ?? DateTime.MinValue).ThenBy(r => r.Email).ToList();
         loading = false;
     }
 
@@ -271,6 +291,21 @@ else if (!string.IsNullOrWhiteSpace(Registered))
     }
 
     private void CancelEdit() => editing = null;
+
+    private async Task DismissRequestAsync(UserRow row)
+    {
+        await Requests.ResolveAsync(row.Id, myEmail, "Dismissed");
+        await LoadAsync();
+    }
+
+    private static string Ago(DateTime utc)
+    {
+        var span = DateTime.UtcNow - utc;
+        return span.TotalMinutes < 1 ? "just now"
+             : span.TotalHours < 1 ? $"{(int)span.TotalMinutes} min ago"
+             : span.TotalDays < 1 ? $"{(int)span.TotalHours} h ago"
+             : $"{(int)span.TotalDays} d ago";
+    }
 
     // ---- Reset password: an admin gives a person a new temporary password (no email involved) ----
 
@@ -325,6 +360,7 @@ else if (!string.IsNullOrWhiteSpace(Registered))
         }
         user.TemporaryPasswordSetUtc = DateTime.UtcNow;
         await UserManager.UpdateAsync(user);
+        await Requests.ResolveAsync(user.Id, myEmail, "Reset");
         await UserManager.SetLockoutEndDateAsync(user, null);   // a reset also lifts a lock-out
         await UserManager.ResetAccessFailedCountAsync(user);
 
@@ -381,6 +417,7 @@ else if (!string.IsNullOrWhiteSpace(Registered))
         else
         {
             var result = await UserManager.DeleteAsync(user);
+            if (result.Succeeded) await Requests.ResolveAsync(user.Id, myEmail, "Account deleted");
             if (result.Succeeded) Say($"{row.Email} was deleted.");
             else Say($"Could not delete {row.Email}: {string.Join(" ", result.Errors.Select(e => e.Description))}", error: true);
         }
@@ -391,6 +428,8 @@ else if (!string.IsNullOrWhiteSpace(Registered))
 
     private sealed class UserRow
     {
+        public string Id { get; set; } = "";
+        public DateTime? RequestedUtc { get; set; }
         public string Email { get; set; } = "";
         public List<string> Roles { get; set; } = new();
         public bool Pending { get; set; }

@@ -60,7 +60,7 @@
 
         <p class="cx-auth-note">
             Forgot your password, or haven't signed in for a while?
-            <a href="Account/ForgotPassword">Ask an administrator to reset it</a>.
+            <a href="Account/ForgotPassword">Ask an administrator for a new one</a>.
         </p>
     </EditForm>
 </AuthShell>
@@ -101,7 +101,7 @@
             && (await SignInManager.CheckPasswordSignInAsync(waiting, Input.Password, lockoutOnFailure: false)).Succeeded)
         {
             Logger.LogWarning("Expired temporary password used by '{Email}'.", Input.Email);
-            errorMessage = "Error: Your temporary password has expired. Ask an administrator to reset it.";
+            errorMessage = "Error: Your temporary password has expired. Use the Forgot password link to ask an administrator for a new one.";
             return;
         }
 

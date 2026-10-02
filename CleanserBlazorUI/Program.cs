@@ -170,6 +170,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<ExcelProcessorService>();
 builder.Services.AddScoped<DataManagementService>();
 builder.Services.AddScoped<ThemeService>();
+builder.Services.AddScoped<PasswordResetRequestService>();
 builder.Services.AddSingleton<FileCleanupSettingsService>();
 // Add SMTP configuration
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));

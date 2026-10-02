@@ -168,12 +168,12 @@
             }));
         }
 
-        await LoadBadgesAsync(dataService, appUser);
+        await LoadBadgesAsync(scope, dataService, appUser);
     }
 
     // Counts are looked up by the item's page, so they follow the page even if
     // an admin renames or moves it. A failing count never takes the menu down.
-    async Task LoadBadgesAsync(DataManagementService dataService, ApplicationUser? appUser)
+    async Task LoadBadgesAsync(IServiceScope scope, DataManagementService dataService, ApplicationUser? appUser)
     {
         var hrefs = groups.SelectMany(g => g.Items).Select(i => i.Href.Trim('/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var isAdmin = currentUserRoles.Contains("admin");
@@ -183,6 +183,10 @@
             if (hrefs.Contains("unloadable-log-report"))
             {
                 badges["unloadable-log-report"] = new Badge(await dataService.GetUnloadableRecordsCountAsync(isAdmin, appUser?.ReceivedTransUserID), true);
+            }
+            if (isAdmin && hrefs.Contains("manageroles"))
+            {
+                badges["manageroles"] = new Badge(await scope.ServiceProvider.GetRequiredService<PasswordResetRequestService>().CountOpenAsync(), true);
             }
             if (isAdmin && hrefs.Contains("reference-data-conflicts"))
             {
