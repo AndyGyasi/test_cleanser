@@ -43,11 +43,17 @@ namespace Microsoft.AspNetCore.Routing
             accountGroup.MapPost("/Logout", async (
                 ClaimsPrincipal user,
                 SignInManager<ApplicationUser> signInManager,
-                [FromForm] string returnUrl) =>
+                [FromForm] string? returnUrl) =>
             {
                 await signInManager.SignOutAsync();
-                return TypedResults.LocalRedirect($"~/{returnUrl}");
-            });
+                // only ever to a page inside this site
+                return TypedResults.LocalRedirect($"~/{(returnUrl ?? string.Empty).TrimStart('/')}");
+            })
+            // A sign-out button on a page that was opened before the session ended (idle time-out, or a
+            // password change) carries an anti-forgery token for the old session, which made the sign-out
+            // answer with an HTTP 400 error page. Signing someone out is harmless to repeat, so it no
+            // longer insists on the token.
+            .DisableAntiforgery();
 
             var manageGroup = accountGroup.MapGroup("/Manage").RequireAuthorization();
 
