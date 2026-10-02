@@ -4,17 +4,17 @@
 @attribute [Authorize(Roles = "notallowed")]
 <PageTitle>Personal Data</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">Personal Data</MudText>
+<h2 class="cx-card-title">Personal Data</h2>
 <StatusMessage />
 
-<MudText Class="mb-2">Your account contains personal data that you have given us. This page allows you to download or delete that data.</MudText>
-<MudText Class="mb-4"><strong>Deleting this data will permanently remove your account, and this cannot be recovered.</strong></MudText>
+<p class="cx-sub" style="margin:0">Your account contains personal data that you have given us. This page allows you to download or delete that data.</p>
+<p class="cx-sub" style="margin:0"><strong>Deleting this data will permanently remove your account, and this cannot be recovered.</strong></p>
 
-<form action="Account/Manage/DownloadPersonalData" method="post" class="mb-3">
+<form action="Account/Manage/DownloadPersonalData" method="post" class="cx-form">
     <AntiforgeryToken />
-    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Download</MudButton>
+    <button type="submit" class="cx-btn cx-btn-primary">Download</button>
 </form>
-<MudButton Href="Account/Manage/DeletePersonalData" Variant="Variant.Filled" Color="Color.Error">Delete</MudButton>
+<a class="cx-btn cx-btn-danger" href="Account/Manage/DeletePersonalData">Delete</a>
 
 @code {
     [CascadingParameter]

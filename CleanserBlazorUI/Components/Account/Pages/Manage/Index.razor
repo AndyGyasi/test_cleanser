@@ -8,20 +8,52 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityUserAccessor UserAccessor
 @inject IdentityRedirectManager RedirectManager
-<MudText Typo="Typo.h5" Class="mb-4">Profile</MudText>
+@using CleanserBlazorUI.Services
+
+<PageTitle>My account · Cleanser</PageTitle>
+
+<h2 class="cx-card-title">Profile</h2>
 <StatusMessage />
 
-<EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
+<div class="cx-profile-head">
+    <span class="cx-avatar lg">@initial</span>
+    <div>
+        <div class="cx-name">@username</div>
+        <div class="cx-sub">@roleLabel</div>
+    </div>
+</div>
+
+<EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post" class="cx-form">
     <DataAnnotationsValidator />
-    <ValidationSummary class="text-danger" role="alert" />
-    <MudTextField T="string?" Value="@username" Label="Username" ReadOnly="true" Disabled="true" Class="mb-3" Style="max-width: 420px" />
-    <div class="login-field" style="max-width: 420px"><label for="fld-phonenumber">Phone number</label><InputText id="fld-phonenumber" @bind-Value="Input.PhoneNumber" type="text" /><ValidationMessage For="() => Input.PhoneNumber" class="text-danger" /></div>
-    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+
+    <div class="cx-field">
+        <label for="prof-email">Email address</label>
+        <span class="cx-control">
+            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 7l9 6 9-6" /></svg>
+            <input id="prof-email" type="text" value="@username" disabled />
+        </span>
+        <span class="cx-hint">This is the email you sign in with. To change it, use the Email tab.</span>
+    </div>
+    <div class="cx-field">
+        <label for="prof-phone">Phone number</label>
+        <span class="cx-control">
+            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z" /></svg>
+            <InputText id="prof-phone" @bind-Value="Input.PhoneNumber" type="text" autocomplete="tel" />
+        </span>
+        <ValidationMessage For="() => Input.PhoneNumber" class="cx-error" />
+    </div>
+
+    <div class="cx-actions">
+        <button type="submit" class="cx-btn cx-btn-primary">Save changes</button>
+    </div>
 </EditForm>
+
 @code {
     private ApplicationUser user = default!;
     private string? username;
     private string? phoneNumber;
+    private string initial = "?";
+    private string roleLabel = "User";
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -35,6 +67,8 @@
         user = await UserAccessor.GetRequiredUserAsync(HttpContext);
         username = await UserManager.GetUserNameAsync(user);
         phoneNumber = await UserManager.GetPhoneNumberAsync(user);
+        initial = string.IsNullOrEmpty(username) ? "?" : username[..1].ToUpperInvariant();
+        roleLabel = RoleLabels.ForUser(await UserManager.GetRolesAsync(user));
 
         Input.PhoneNumber ??= phoneNumber;
     }

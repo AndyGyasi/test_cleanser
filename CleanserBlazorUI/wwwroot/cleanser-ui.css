@@ -304,3 +304,71 @@ html .cx-auth-legal a:hover { color: var(--text); }
 .cx-rules li::before { content: ""; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--input-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; transition: background 0.2s, border-color 0.2s; }
 .cx-rules li.ok { color: var(--text); }
 .cx-rules li.ok::before { content: "\2713"; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); animation: cx-pop 0.28s ease-out; }
+
+/* ---------- Tables, pills, tabs, selects (account pages and the lists to come) ---------- */
+.cx-card.flush { padding: 0; gap: 0; overflow: hidden; }
+.cx-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 22px; }
+.cx-card-title { margin: 0; font-size: 15px; font-weight: 600; }
+.cx-table-wrap { overflow-x: auto; }
+.cx-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+.cx-table th { text-align: left; font-weight: 500; font-size: 12px; letter-spacing: 0.3px; color: var(--sub); padding: 11px 14px; border-top: 1px solid var(--border); white-space: nowrap; }
+.cx-table td { padding: 13px 14px; border-top: 1px solid var(--border); vertical-align: middle; }
+.cx-table th:first-child, .cx-table td:first-child { padding-left: 22px; }
+.cx-table th:last-child, .cx-table td:last-child { padding-right: 22px; }
+.cx-table tbody tr { transition: background 0.12s; }
+.cx-table tbody tr:hover td { background: color-mix(in srgb, var(--card-2) 70%, transparent); }
+.cx-table .num { text-align: right; font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+.cx-table .cx-row-actions { text-align: right; white-space: nowrap; }
+.cx-cell-user { display: flex; align-items: center; gap: 12px; font-weight: 500; }
+.cx-empty { padding: 36px 22px; text-align: center; color: var(--sub); border-top: 1px solid var(--border); }
+.cx-pill { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 12px; white-space: nowrap; background: var(--chip); color: var(--chip-text); }
+.cx-pill.ok { background: var(--active); color: var(--pill-text); }
+.cx-pill.warn { background: var(--warn-bg); color: var(--warn); }
+.cx-pill.bad { background: var(--danger-bg); color: var(--danger); }
+.cx-pill.info { background: var(--info-bg); color: var(--info); }
+.cx-btn-sm { min-height: 34px; padding: 0 12px; font-size: 13px; border-radius: 9px; }
+html .cx-btn-danger { background: transparent; border-color: var(--danger-border); color: var(--danger); font-weight: 500; }
+html .cx-btn-danger:hover { background: var(--danger-bg); }
+.cx-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.cx-search { min-height: 40px; min-width: 260px; }
+.cx-search input { font-size: 14px; }
+.cx-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.cx-form { display: flex; flex-direction: column; gap: 16px; }
+.cx-control input:disabled { color: var(--sub); cursor: not-allowed; }
+.cx-control select { flex-grow: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 4px; }
+.cx-control select option { background: var(--card); color: var(--text); }
+.cx-control select + svg { width: 14px; height: 14px; pointer-events: none; }
+.cx-profile-head { display: flex; align-items: center; gap: 14px; }
+.cx-profile-head .cx-name { font-weight: 600; font-size: 16px; }
+.cx-avatar.lg { width: 56px; height: 56px; font-size: 18px; }
+
+.cx-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 22px; overflow-x: auto; scrollbar-width: none; }
+.cx-tab { padding: 10px 14px; text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; font-size: 14px; transition: color 0.15s, border-color 0.15s; }
+html a.cx-tab { color: var(--sub); }
+html a.cx-tab:hover { color: var(--text); }
+html a.cx-tab[aria-current="page"] { color: var(--text); font-weight: 500; border-bottom-color: var(--accent); }
+.cx-manage-card { max-width: 760px; }
+
+.cx-alert > span { flex: 1; }
+.cx-alert.warn { background: var(--warn-bg); border-color: transparent; color: var(--warn); }
+.cx-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 16px; color: var(--sub); }
+.cx-steps li::marker { color: var(--muted); font-weight: 600; }
+.cx-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 420px; padding: 16px; background: var(--card-2); border: 1px solid var(--border); border-radius: 14px; }
+.cx-codes .recovery-code { font-family: "IBM Plex Mono", monospace; font-size: 14px; color: var(--text); letter-spacing: 0.5px; }
+
+/* dialogs (MudBlazor): same rounded card look as the rest of the app */
+.mud-dialog { border-radius: 18px !important; border: 1px solid var(--border); box-shadow: var(--shadow-md) !important; }
+.mud-dialog .mud-dialog-title { font-weight: 600; letter-spacing: -0.2px; }
+.mud-overlay-dialog { backdrop-filter: blur(2px); }
+
+/* wide tables become stacked cards on phones: no sideways scrolling to reach the actions */
+@media (max-width: 640px) {
+  .cx-table.cx-stack { min-width: 0; }
+  .cx-table.cx-stack thead { display: none; }
+  .cx-table.cx-stack tbody tr { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 12px; padding: 14px 18px; border-top: 1px solid var(--border); }
+  .cx-table.cx-stack tbody td { display: block; padding: 0 !important; border: 0; }
+  .cx-table.cx-stack tbody td:first-child { grid-column: 1 / -1; }
+  .cx-table.cx-stack tbody td[colspan] { grid-column: 1 / -1; }
+  .cx-table.cx-stack tbody td.cx-row-actions { grid-column: 1 / -1; text-align: left; }
+  .cx-table.cx-stack tbody tr:hover td { background: transparent; }
+}

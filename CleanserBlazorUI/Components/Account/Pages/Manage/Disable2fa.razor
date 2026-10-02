@@ -11,18 +11,16 @@
 <PageTitle>Disable two-factor authentication (2FA)</PageTitle>
 
 <StatusMessage />
-<MudText Typo="Typo.h5" Class="mb-4">Disable two-factor authentication (2FA)</MudText>
+<h2 class="cx-card-title">Disable two-factor authentication (2FA)</h2>
 
-<MudAlert Severity="MudBlazor.Severity.Warning" Class="mb-4">
-    <strong>This action only disables 2FA.</strong>
+<div class="cx-alert warn"><span><strong>This action only disables 2FA.</strong>
     <br />
     Disabling 2FA does not change the keys used in authenticator apps. If you wish to change the key
-    used in an authenticator app you should <MudLink Href="Account/Manage/ResetAuthenticator">reset your authenticator keys</MudLink>.
-</MudAlert>
+    used in an authenticator app you should <a href="Account/Manage/ResetAuthenticator">reset your authenticator keys</a>.</span></div>
 
 <form @formname="disable-2fa" @onsubmit="OnSubmitAsync" method="post">
     <AntiforgeryToken />
-    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Error">Disable 2FA</MudButton>
+    <button type="submit" class="cx-btn cx-btn-danger">Disable 2FA</button>
 </form>
 
 @code {

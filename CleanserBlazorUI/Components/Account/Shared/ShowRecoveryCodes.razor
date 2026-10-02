@@ -1,20 +1,14 @@
 ﻿<StatusMessage Message="@StatusMessage" />
-<MudText Typo="Typo.h5" Class="mb-4">Recovery codes</MudText>
-<MudAlert Severity="MudBlazor.Severity.Warning" Class="mb-4">
-    <strong>Put these codes in a safe place.</strong>
+<h2 class="cx-card-title">Recovery codes</h2>
+<div class="cx-alert warn"><span><strong>Put these codes in a safe place.</strong>
     <br />
-    If you lose your device and don't have the recovery codes you will lose access to your account.
-</MudAlert>
-<MudPaper Class="pa-4" Outlined="true" Style="max-width: 420px;">
-    <MudGrid>
-        @foreach (var recoveryCode in RecoveryCodes)
-        {
-            <MudItem xs="6">
-                <code class="recovery-code">@recoveryCode</code>
-            </MudItem>
-        }
-    </MudGrid>
-</MudPaper>
+    If you lose your device and don't have the recovery codes you will lose access to your account.</span></div>
+<div class="cx-codes">
+    @foreach (var recoveryCode in RecoveryCodes)
+    {
+        <code class="recovery-code">@recoveryCode</code>
+    }
+</div>
 
 @code {
     [Parameter]

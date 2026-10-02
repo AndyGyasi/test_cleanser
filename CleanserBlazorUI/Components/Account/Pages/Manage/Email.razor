@@ -13,30 +13,45 @@
 @inject NavigationManager NavigationManager
 @inject ILogger<Email> Logger
 
-<PageTitle>Manage email</PageTitle>
+<PageTitle>Email · Cleanser</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">Manage email</MudText>
+<h2 class="cx-card-title">Email</h2>
 <StatusMessage Message="@message" />
 
 <form @onsubmit="OnSendEmailVerificationAsync" @formname="send-verification" id="send-verification-form" method="post">
     <AntiforgeryToken />
 </form>
-<EditForm Model="Input" FormName="change-email" OnValidSubmit="OnValidSubmitAsync" method="post">
+<EditForm Model="Input" FormName="change-email" OnValidSubmit="OnValidSubmitAsync" method="post" class="cx-form">
     <DataAnnotationsValidator />
-    <ValidationSummary class="text-danger" role="alert" />
 
-    <MudTextField T="string?" Value="@email" Label="Email" ReadOnly="true" Disabled="true" Class="mb-1" Style="max-width: 420px"
-                  Adornment="@(isEmailConfirmed ? Adornment.End : Adornment.None)"
-                  AdornmentIcon="@Icons.Material.Filled.CheckCircle" AdornmentColor="Color.Success" />
-    @if (!isEmailConfirmed)
-    {
-        <MudButton Variant="Variant.Text" Color="Color.Primary" ButtonType="ButtonType.Submit" form="send-verification-form" Class="mb-3">
-            Send verification email
-        </MudButton>
-    }
+    <div class="cx-field">
+        <label for="em-current">Current email</label>
+        <span class="cx-control">
+            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 7l9 6 9-6" /></svg>
+            <input id="em-current" type="text" value="@email" disabled />
+            @if (isEmailConfirmed)
+            {
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--accent)"><path d="M5 12l4 4 10-10" /></svg>
+            }
+        </span>
+        @if (!isEmailConfirmed)
+        {
+            <span class="cx-hint">This email is not verified yet.
+                <button type="submit" form="send-verification-form" class="cx-linkbtn">Send verification email</button></span>
+        }
+    </div>
+    <div class="cx-field">
+        <label for="em-new">New email</label>
+        <span class="cx-control">
+            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 7l9 6 9-6" /></svg>
+            <InputText id="em-new" @bind-Value="Input.NewEmail" type="email" autocomplete="email" />
+        </span>
+        <ValidationMessage For="() => Input.NewEmail" class="cx-error" />
+    </div>
 
-    <div class="login-field" style="max-width: 420px"><label for="fld-newemail">New email</label><InputText id="fld-newemail" @bind-Value="Input.NewEmail" type="text" autocomplete="email" /><ValidationMessage For="() => Input.NewEmail" class="text-danger" /></div>
-    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Change email</MudButton>
+    <div class="cx-actions">
+        <button type="submit" class="cx-btn cx-btn-primary">Change email</button>
+    </div>
 </EditForm>
 
 @code {

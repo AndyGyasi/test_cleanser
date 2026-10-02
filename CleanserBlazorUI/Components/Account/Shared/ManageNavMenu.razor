@@ -1,28 +1,32 @@
-﻿@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Identity
 @using CleanserBlazorUI.Data
 
 @inject SignInManager<ApplicationUser> SignInManager
-@inject FileCleanupSettingsService SettingsService
+@inject NavigationManager NavigationManager
 
-@* Scoped to account-settings pages only now -- the admin links that used to
-   duplicate here (Register User, Manage Users, Reference Data, etc.) live
-   in the main sidebar (NavMenu.razor) so there's one place to find them
-   instead of two partial lists. *@
-<MudNavMenu>
-    <MudNavLink Href="Account/Manage" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Person">Profile</MudNavLink>
-    <MudNavLink Href="Account/Manage/Email" Icon="@Icons.Material.Filled.Email">Email</MudNavLink>
-    <MudNavLink Href="Account/Manage/ChangePassword" Icon="@Icons.Material.Filled.Lock">Password</MudNavLink>
+@* Account-settings tabs. The admin links that used to duplicate here (Register
+   User, Manage Users, Reference Data, etc.) live in the main sidebar (NavMenu),
+   so there is one place to find them instead of two partial lists. *@
+<nav class="cx-tabs" aria-label="Account settings">
+    <a class="cx-tab" href="Account/Manage" aria-current="@Current("Account/Manage")">Profile</a>
+    <a class="cx-tab" href="Account/Manage/Email" aria-current="@Current("Account/Manage/Email")">Email</a>
+    <a class="cx-tab" href="Account/Manage/ChangePassword" aria-current="@Current("Account/Manage/ChangePassword")">Password</a>
     @if (hasExternalLogins)
     {
-        <MudNavLink Href="Account/Manage/ExternalLogins" Icon="@Icons.Material.Filled.Link">External logins</MudNavLink>
+        <a class="cx-tab" href="Account/Manage/ExternalLogins" aria-current="@Current("Account/Manage/ExternalLogins")">External logins</a>
     }
-</MudNavMenu>
+</nav>
 
 @code {
     private bool hasExternalLogins;
+    private string currentPath = "";
 
     protected override async Task OnInitializedAsync()
     {
+        currentPath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri).Split('?', '#')[0].Trim('/');
         hasExternalLogins = (await SignInManager.GetExternalAuthenticationSchemesAsync()).Any();
     }
+
+    private string? Current(string path) =>
+        currentPath.Equals(path, StringComparison.OrdinalIgnoreCase) ? "page" : null;
 }

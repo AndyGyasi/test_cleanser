@@ -1,180 +1,287 @@
-﻿@page "/Manageroles"
-@using Microsoft.EntityFrameworkCore
+@page "/Manageroles"
 @rendermode InteractiveServer
-@inject DataManagementService DataManagementService
-@inject IDialogService DialogService
-@inject UserManager<ApplicationUser> UserManager
-
-
-
 @using System.ComponentModel.DataAnnotations
-@using System.Text
-@using System.Text.Encodings.Web
-@using ICleanserBlazorUI.Interface
+@using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Identity
-@using Microsoft.AspNetCore.WebUtilities
 @using CleanserBlazorUI.Data
-
-
-
-
+@using CleanserBlazorUI.Services
 @inject UserManager<ApplicationUser> UserManager
-@inject IUserStore<ApplicationUser> UserStore
-@inject SignInManager<ApplicationUser> SignInManager
-@inject NavigationManager NavigationManager
-@inject IdentityRedirectManager RedirectManager
-@inject ICustomEmailSender EmailSender
-
-
-
 @attribute [Authorize(Roles = "admin")]
-<StatusMessage Message="@Message" />
-<EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
-    <DataAnnotationsValidator />
-    <MudText Typo="Typo.h6"><b>EDIT ROLE</b></MudText>
-    <hr style="width: 535px" />
-    <div class="py-3 bg-transparent"></div>
-    <ValidationSummary class="text-danger" role="alert" />
 
-    <!-- Email Field -->
-    <div>
-        <label>
-            <InputText placeholder="example@XDSdata.com" disabled="@isDisabled" @bind-Value="Input.Email" class="form-control py-4" style="width: 535px" aria-required="true" />
-        </label>
-    </div>
-    <div class="py-2 bg-transparent"></div>
-    <div>
-        <label>
-            <InputText @bind-Value="Input.NewUserRoles" class="form-control py-4" style="width: 535px" autocomplete="role" aria-required="true" placeholder="admin, manager, superuser, user" />
-            <ValidationMessage For="() => Input.NewUserRoles" class="text-danger" />
-        </label>
-    </div>
-    <div class="py-2 bg-transparent"></div>
+<PageTitle>Manage users · Cleanser</PageTitle>
 
-    <!-- Register Button -->
-    <button class="py-3 btn btn-primary" type="submit" style="width: 535px;">Update Role</button>
-    <div class="py-3 bg-transparent"></div>
-</EditForm>
-@foreach (var bs in usersWithRoles)
+<header class="cx-page-head">
+    <div>
+        <div class="cx-crumb">Accounts</div>
+        <h1>Manage users</h1>
+        <p>Change what each person can do, or remove an account.</p>
+    </div>
+    <div class="cx-actions">
+        <a class="cx-btn cx-btn-primary" href="Account/Register">
+            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 12a4 4 0 100-8 4 4 0 000 8zM2 20c0-3.3 3.6-6 8-6 1.4 0 2.7.3 3.8.7M19 14v6M16 17h6" /></svg>
+            Register user
+        </a>
+    </div>
+</header>
+
+<MudMessageBox @ref="deleteBox" Title="Delete user" CancelText="Cancel">
+    <MessageContent>
+        Delete <strong>@pendingDelete?.Email</strong>? Their account is removed and this cannot be undone.
+    </MessageContent>
+    <YesButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error">Delete</MudButton>
+    </YesButton>
+</MudMessageBox>
+
+@if (!string.IsNullOrEmpty(statusMessage))
 {
-
-    <MudGrid Style="min-width: 100%">
-        <MudItem lg="11">
-            @if (bs.Email == "noreply.XDSmonitor@XDSdatagh.com")
-            {
-                @if (bs.Roles.Count > 0)
-                {
-                    <MudButton Disabled="true" OnClick="@(() => DeleteUser(bs))" Color="Color.Error" Icon="@Icons.Material.Filled.Edit">DELETE</MudButton>
-                    <MudButton Disabled="true" OnClick="@(() => EditUser(bs))" Color="Color.Success" Icon="@Icons.Material.Filled.Delete">EDIT</MudButton>
-                    <MudButton Variant="Variant.Text">@bs.Email</MudButton>
-                    <MudButton>@bs.Roles[0]</MudButton>
-                }
-            }else
-            {
-                @if (bs.Roles.Count > 0)
-                {
-                    <MudButton OnClick="@(() => DeleteUser(bs))" Color="Color.Error" Icon="@Icons.Material.Filled.Edit">DELETE</MudButton>
-                    <MudButton OnClick="@(() => EditUser(bs))" Color="Color.Success" Icon="@Icons.Material.Filled.Delete">EDIT</MudButton>
-                    <MudButton Variant="Variant.Text">@bs.Email</MudButton>
-                    <MudButton>@bs.Roles[0]</MudButton>
-                }
-            }
-        </MudItem>
-    </MudGrid>
-
+    <div class="cx-alert @(statusIsError ? "error" : "ok")" role="@(statusIsError ? "alert" : "status")" style="margin-bottom:18px">@statusMessage</div>
 }
-@code {
-    private bool isDisabled = true; // Initially disabled
-    private IEnumerable<IdentityError>? identityErrors;
-    [SupplyParameterFromForm] private InputModel Input { get; set; } = new();
-    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
-    private string? Message => identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
-    List<UserWithRoles> usersWithRoles = new();
-    protected override async Task OnInitializedAsync()
-    {
-        usersWithRoles.Clear();
-        usersWithRoles = await LoadUsersWithRoles();
-        await InvokeAsync(StateHasChanged);
-    }
-    private async Task<List<UserWithRoles>> LoadUsersWithRoles()
-    {
-        var users = await UserManager.Users.ToListAsync();
+else if (!string.IsNullOrWhiteSpace(Registered))
+{
+    <div class="cx-alert ok" role="status" style="margin-bottom:18px">Account created for @Registered. They will be asked to choose their own password the first time they sign in.</div>
+}
 
+@if (editing is not null)
+{
+    <EditForm Model="Input" OnValidSubmit="UpdateRoleAsync" class="cx-card" style="max-width:560px;margin-bottom:18px">
+        <DataAnnotationsValidator />
+        <h2>Edit role</h2>
+
+        <div class="cx-field">
+            <label for="edit-email">User</label>
+            <span class="cx-control">
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 7l9 6 9-6" /></svg>
+                <input id="edit-email" type="text" value="@Input.Email" disabled />
+            </span>
+        </div>
+
+        <div class="cx-field">
+            <label for="edit-role">Role</label>
+            <span class="cx-control">
+                <InputSelect id="edit-role" @bind-Value="Input.NewUserRoles">
+                    <option value="">Select a role</option>
+                    @foreach (var role in RoleOptions)
+                    {
+                        <option value="@role">@RoleLabels.For(role)</option>
+                    }
+                </InputSelect>
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            </span>
+            <ValidationMessage For="() => Input.NewUserRoles" class="cx-error" />
+        </div>
+
+        <div class="cx-actions">
+            <button type="submit" class="cx-btn cx-btn-primary">Update role</button>
+            <button type="button" class="cx-btn cx-btn-ghost" @onclick="CancelEdit">Cancel</button>
+        </div>
+    </EditForm>
+}
+
+<div class="cx-card flush">
+    <div class="cx-card-head">
+        <h2>@Filtered.Count @(Filtered.Count == 1 ? "user" : "users")</h2>
+        <label class="cx-control cx-search">
+            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-3.5-3.5" /></svg>
+            <span class="cx-sr-only">Search users</span>
+            <input type="search" placeholder="Search by email or role" @bind="search" @bind:event="oninput" />
+        </label>
+    </div>
+
+    <div class="cx-table-wrap">
+        <table class="cx-table cx-stack">
+            <thead>
+                <tr><th>User</th><th>Role</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+                @if (loading)
+                {
+                    @for (var i = 0; i < 4; i++)
+                    {
+                        <tr><td colspan="4"><div class="cx-skeleton" style="height:22px"></div></td></tr>
+                    }
+                }
+                else if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="4" class="cx-empty">@(string.IsNullOrWhiteSpace(search) ? "There are no users yet." : $"No users match \"{search}\". Check the spelling.")</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in Filtered)
+                    {
+                        <tr>
+                            <td>
+                                <div class="cx-cell-user">
+                                    <span class="cx-avatar sm">@row.Initial</span>
+                                    <span>@row.Email</span>
+                                </div>
+                            </td>
+                            <td>
+                                @if (row.Roles.Count == 0)
+                                {
+                                    <span class="cx-pill warn">No role</span>
+                                }
+                                else
+                                {
+                                    @foreach (var role in row.Roles)
+                                    {
+                                        <span class="cx-pill">@RoleLabels.For(role)</span>
+                                    }
+                                }
+                            </td>
+                            <td><span class="cx-pill @row.StatusTone">@row.Status</span></td>
+                            <td class="cx-row-actions">
+                                <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@row.IsProtected" @onclick="() => StartEdit(row)">Edit role</button>
+                                <button type="button" class="cx-btn cx-btn-danger cx-btn-sm" disabled="@row.IsProtected" @onclick="() => DeleteAsync(row)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    // The service account the app itself relies on: it cannot be edited or deleted here.
+    private const string ProtectedAccount = "noreply.XDSmonitor@XDSdatagh.com";
+
+    private static readonly string[] RoleOptions = { "admin", "manager", "superuser", "user", "registrar" };
+
+    [SupplyParameterFromQuery(Name = "registered")]
+    private string? Registered { get; set; }
+
+    private List<UserRow> rows = new();
+    private UserRow? editing;
+    private UserRow? pendingDelete;
+    private MudMessageBox deleteBox = default!;
+    private InputModel Input = new();
+    private string search = "";
+    private bool loading = true;
+    private string? statusMessage;
+    private bool statusIsError;
+
+    private List<UserRow> Filtered => string.IsNullOrWhiteSpace(search)
+        ? rows
+        : rows.Where(r => r.Email.Contains(search, StringComparison.OrdinalIgnoreCase)
+                          || r.Roles.Any(role => RoleLabels.For(role).Contains(search, StringComparison.OrdinalIgnoreCase))).ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var users = await UserManager.Users.OrderBy(u => u.Email).ToListAsync();
+        var loaded = new List<UserRow>();
         foreach (var user in users)
         {
-            var roles = await UserManager.GetRolesAsync(user);
-            usersWithRoles.Add(new UserWithRoles
+            var roles = (await UserManager.GetRolesAsync(user)).ToList();
+            loaded.Add(new UserRow
             {
-                Email = user.Email,
-                Roles = roles.ToList()
+                Email = user.Email ?? user.UserName ?? "",
+                Roles = roles.Where(r => !IsMustChange(r)).ToList(),
+                Pending = roles.Any(IsMustChange),
+                Locked = user.LockoutEnd is { } until && until > DateTimeOffset.UtcNow
             });
         }
-        return usersWithRoles;
+        rows = loaded;
+        loading = false;
     }
-    private async Task EditUser(UserWithRoles user)
+
+    private static bool IsMustChange(string role) =>
+        string.Equals(role, PasswordChangeMiddleware.RoleName, StringComparison.OrdinalIgnoreCase);
+
+    private void Say(string message, bool error = false)
     {
-        Input.Email = user.Email;
-        if (user.Roles.Count > 0)
+        statusMessage = message;
+        statusIsError = error;
+        Registered = null;
+    }
+
+    private void StartEdit(UserRow row)
+    {
+        if (row.IsProtected) return;
+        editing = row;
+        Input = new InputModel { Email = row.Email, NewUserRoles = row.Roles.FirstOrDefault() ?? "" };
+        statusMessage = null;
+    }
+
+    private void CancelEdit() => editing = null;
+
+    private async Task UpdateRoleAsync()
+    {
+        if (string.Equals(Input.Email, ProtectedAccount, StringComparison.OrdinalIgnoreCase)) return;
+
+        var user = await UserManager.FindByEmailAsync(Input.Email);
+        if (user is null)
         {
-            Input.NewUserRoles = user.Roles[0];
-            await InvokeAsync(StateHasChanged);
+            Say("That user no longer exists.", error: true);
+            editing = null;
+            await LoadAsync();
+            return;
         }
 
-    }
-    private async Task DeleteUser(UserWithRoles user)
-    {
-        var identityUser = await UserManager.FindByNameAsync(user.Email);
-        if (identityUser != null && identityUser.Email != "noreply.XDSmonitor@XDSdatagh.com")
+        // Replace the person's role, but never lift a pending "must set a password" flag:
+        // that is only lifted by the person choosing their own password.
+        var current = await UserManager.GetRolesAsync(user);
+        var remove = await UserManager.RemoveFromRolesAsync(user, current.Where(r => !IsMustChange(r)).ToList());
+        var add = remove.Succeeded ? await UserManager.AddToRoleAsync(user, Input.NewUserRoles) : remove;
+        if (!add.Succeeded)
         {
-            await UserManager.DeleteAsync(identityUser);
+            Say($"Could not change the role: {string.Join(" ", add.Errors.Select(e => e.Description))}", error: true);
         }
-        usersWithRoles.Clear();
-        usersWithRoles = await LoadUsersWithRoles();
-        await InvokeAsync(StateHasChanged);
-    }
-    public async Task RegisterUser(EditContext editContext)
-    {
-        var userByEmail = await UserManager.FindByEmailAsync(Input.Email);
-        if (userByEmail != null)
+        else
         {
-            var resultRoles = await UserManager.GetRolesAsync(userByEmail);
-            var roleRemover = await UserManager.RemoveFromRolesAsync(userByEmail, resultRoles);
-            if (!roleRemover.Succeeded)
-            {
-                throw new InvalidOperationException("Failed to revoke roles.");
-            }
-            else
-            {
-                await UserManager.AddToRoleAsync(userByEmail, Input.NewUserRoles);
-            }
-        }
-        usersWithRoles.Clear();
-        usersWithRoles = await LoadUsersWithRoles();
-        Input = new();
-        await InvokeAsync(StateHasChanged);
-    }
-    public bool IsAllowedWord(string input, params string[] allowedWords)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            return false; // Input is null or empty
+            Say($"{Input.Email} is now {RoleLabels.For(Input.NewUserRoles)}.");
         }
 
-        return allowedWords.Contains(input, StringComparer.OrdinalIgnoreCase);
+        editing = null;
+        await LoadAsync();
     }
+
+    private async Task DeleteAsync(UserRow row)
+    {
+        if (row.IsProtected) return;
+
+        pendingDelete = row;
+        var confirmed = await deleteBox.ShowAsync();
+        if (confirmed != true) return;
+
+        var user = await UserManager.FindByNameAsync(row.Email);
+        if (user is null || string.Equals(user.Email, ProtectedAccount, StringComparison.OrdinalIgnoreCase))
+        {
+            Say("That user could not be deleted.", error: true);
+        }
+        else
+        {
+            var result = await UserManager.DeleteAsync(user);
+            if (result.Succeeded) Say($"{row.Email} was deleted.");
+            else Say($"Could not delete {row.Email}: {string.Join(" ", result.Errors.Select(e => e.Description))}", error: true);
+        }
+
+        if (editing?.Email == row.Email) editing = null;
+        await LoadAsync();
+    }
+
+    private sealed class UserRow
+    {
+        public string Email { get; set; } = "";
+        public List<string> Roles { get; set; } = new();
+        public bool Pending { get; set; }
+        public bool Locked { get; set; }
+
+        public string Initial => Email.Length > 0 ? Email[..1].ToUpperInvariant() : "?";
+        public bool IsProtected => string.Equals(Email, ProtectedAccount, StringComparison.OrdinalIgnoreCase);
+        public string Status => Locked ? "Locked" : Pending ? "Pending password" : "Active";
+        public string StatusTone => Locked ? "bad" : Pending ? "warn" : "ok";
+    }
+
     private sealed class InputModel
     {
-        [Display(Name = "Email")]
         public string Email { get; set; } = "";
 
-        [Required]
+        [Required(ErrorMessage = "Choose a role.")]
         [Display(Name = "Role")]
         [AllowedWordsAttribute("admin", "manager", "superuser", "user", "registrar")]
         public string NewUserRoles { get; set; } = "";
-    }
-    public class UserWithRoles
-    {
-        public string Email { get; set; }
-        public List<string> Roles { get; set; }
     }
 }

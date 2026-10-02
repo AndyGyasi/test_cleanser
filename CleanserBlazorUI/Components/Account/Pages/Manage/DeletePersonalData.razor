@@ -10,24 +10,32 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<DeletePersonalData> Logger
 
-<PageTitle>Delete Personal Data</PageTitle>
+<PageTitle>Delete personal data · Cleanser</PageTitle>
 
+<h2 class="cx-card-title">Delete personal data</h2>
 <StatusMessage Message="@message" />
-
-<MudText Typo="Typo.h5" Class="mb-4">Delete Personal Data</MudText>
-
-<MudAlert Severity="MudBlazor.Severity.Warning" Class="mb-4">
+<div class="cx-alert error" role="alert">
     <strong>Deleting this data will permanently remove your account, and this cannot be recovered.</strong>
-</MudAlert>
+</div>
 
-<EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post">
+<EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post" class="cx-form">
     <DataAnnotationsValidator />
-    <ValidationSummary class="text-danger" role="alert" />
+
     @if (requirePassword)
     {
-        <div class="login-field" style="max-width: 420px"><label for="fld-password">Password</label><InputText id="fld-password" @bind-Value="Input.Password" type="password" autocomplete="current-password" /><ValidationMessage For="() => Input.Password" class="text-danger" /></div>
+        <div class="cx-field">
+            <label for="fld-password">Password</label>
+            <span class="cx-control">
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V8a4 4 0 018 0v3" /></svg>
+                <InputText id="fld-password" @bind-Value="Input.Password" type="password" autocomplete="current-password" />
+            </span>
+            <ValidationMessage For="() => Input.Password" class="cx-error" />
+        </div>
+
     }
-    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Error">Delete data and close my account</MudButton>
+    <div class="cx-actions">
+        <button type="submit" class="cx-btn cx-btn-danger">Delete data and close my account</button>
+    </div>
 </EditForm>
 
 @code {

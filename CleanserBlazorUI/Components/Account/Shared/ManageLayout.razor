@@ -1,15 +1,16 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @layout AccountLayout
 
-<MudGrid Spacing="4">
-    <MudItem xs="12" sm="4" md="3">
-        <MudPaper Class="pa-2" Outlined="true">
-            <ManageNavMenu />
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" sm="8" md="9">
-        <MudPaper Class="pa-6" Outlined="true">
-            @Body
-        </MudPaper>
-    </MudItem>
-</MudGrid>
+<header class="cx-page-head">
+    <div>
+        <div class="cx-crumb">Accounts</div>
+        <h1>My account</h1>
+        <p>Your profile and sign-in details.</p>
+    </div>
+</header>
+
+<ManageNavMenu />
+
+<div class="cx-card cx-manage-card">
+    @Body
+</div>

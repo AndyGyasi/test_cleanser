@@ -22,35 +22,42 @@
 else
 {
     <StatusMessage Message="@message" />
-    <MudText Typo="Typo.h5" Class="mb-4">Configure authenticator app</MudText>
-    <MudText Class="mb-2">To use an authenticator app go through the following steps:</MudText>
-    <ol class="list">
-        <li class="mb-3">
-            <MudText>
+    <h2 class="cx-card-title">Configure authenticator app</h2>
+    <p class="cx-sub">To use an authenticator app go through the following steps:</p>
+    <ol class="cx-steps">
+        <li>
+            <p class="cx-sub" style="margin:0">
                 Download a two-factor authenticator app like Microsoft Authenticator for
-                <MudLink Href="https://go.microsoft.com/fwlink/?Linkid=825072">Android</MudLink> and
-                <MudLink Href="https://go.microsoft.com/fwlink/?Linkid=825073">iOS</MudLink> or
+                <a href="https://go.microsoft.com/fwlink/?Linkid=825072">Android</a> and
+                <a href="https://go.microsoft.com/fwlink/?Linkid=825073">iOS</a> or
                 Google Authenticator for
-                <MudLink Href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2&amp;hl=en">Android</MudLink> and
-                <MudLink Href="https://itunes.apple.com/us/app/google-authenticator/id388497605?mt=8">iOS</MudLink>.
-            </MudText>
+                <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2&amp;hl=en">Android</a> and
+                <a href="https://itunes.apple.com/us/app/google-authenticator/id388497605?mt=8">iOS</a>.
+            </p>
         </li>
-        <li class="mb-3">
-            <MudText Class="mb-2">Scan the QR Code or enter this key <kbd>@sharedKey</kbd> into your two factor authenticator app. Spaces and casing do not matter.</MudText>
-            <MudAlert Severity="MudBlazor.Severity.Info" Class="mb-2">Learn how to <MudLink Href="https://go.microsoft.com/fwlink/?Linkid=852423">enable QR code generation</MudLink>.</MudAlert>
+        <li>
+            <p class="cx-sub">Scan the QR Code or enter this key <kbd>@sharedKey</kbd> into your two factor authenticator app. Spaces and casing do not matter.</p>
+            <div class="cx-alert info"><span>Learn how to <a href="https://go.microsoft.com/fwlink/?Linkid=852423">enable QR code generation</a>.</span></div>
             <div data-url="@authenticatorUri"></div>
         </li>
         <li>
-            <MudText Class="mb-2">
+            <p class="cx-sub">
                 Once you have scanned the QR code or input the key above, your two factor authentication app will provide you
                 with a unique code. Enter the code in the confirmation box below.
-            </MudText>
-            <EditForm Model="Input" FormName="send-code" OnValidSubmit="OnValidSubmitAsync" method="post">
+            </p>
+            <EditForm Model="Input" FormName="send-code" OnValidSubmit="OnValidSubmitAsync" method="post" class="cx-form">
                 <DataAnnotationsValidator />
-                <div class="login-field" style="max-width: 420px"><label for="fld-code">Verification Code</label><InputText id="fld-code" @bind-Value="Input.Code" type="text" autocomplete="off" /><ValidationMessage For="() => Input.Code" class="text-danger" /></div>
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Verify</MudButton>
-                <ValidationSummary class="text-danger" role="alert" />
-            </EditForm>
+                <div class="cx-field">
+                        <label for="fld-code">Verification code</label>
+                        <span class="cx-control">
+                            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 15a4 4 0 100-8 4 4 0 000 8zM12 11h9M18 11v3M21 11v2" /></svg>
+                            <InputText id="fld-code" @bind-Value="Input.Code" type="text" autocomplete="off" />
+                        </span>
+                        <ValidationMessage For="() => Input.Code" class="cx-error" />
+                    </div>
+
+                <div class="cx-actions"><button type="submit" class="cx-btn cx-btn-primary">Verify</button></div>
+</EditForm>
         </li>
     </ol>
 }

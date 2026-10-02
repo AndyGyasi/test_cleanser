@@ -105,13 +105,6 @@
     static string ResolveIcon(string? key) =>
         !string.IsNullOrWhiteSpace(key) && IconMap.TryGetValue(key, out var icon) ? icon : Icons.Material.Outlined.Circle;
 
-    // Roles are shown most-privileged first; anything else falls back to its own name.
-    static readonly (string Role, string Label)[] RoleLabels =
-    {
-        ("admin", "Administrator"), ("superuser", "Superuser"), ("manager", "Manager"),
-        ("registrar", "Registrar"), ("user", "User"),
-    };
-
     record NavGroup(int Id, string Title, List<NavItem> Items);
     record Badge(int Count, bool Warn);
 
@@ -156,8 +149,7 @@
                 currentUserRoles = new HashSet<string>(await userManager.GetRolesAsync(appUser), StringComparer.OrdinalIgnoreCase);
             }
 
-            roleLabel = RoleLabels.FirstOrDefault(r => currentUserRoles.Contains(r.Role)).Label
-                        ?? (currentUserRoles.FirstOrDefault() ?? "User");
+            roleLabel = RoleLabels.ForUser(currentUserRoles);
         }
 
         var sections = await dataService.GetNavSectionsAsync();

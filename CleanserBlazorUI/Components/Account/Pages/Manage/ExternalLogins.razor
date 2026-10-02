@@ -15,41 +15,41 @@
 <StatusMessage />
 @if (currentLogins?.Count > 0)
 {
-    <MudText Typo="Typo.h5" Class="mb-4">Registered Logins</MudText>
-    <MudTable Items="@currentLogins" Hover="true" Dense="true" Elevation="0" Outlined="true" Class="mb-4">
-        <HeaderContent>
-            <MudTh>Provider</MudTh>
-            <MudTh></MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd>@context.ProviderDisplayName</MudTd>
-            <MudTd>
-                @if (showRemoveButton)
+    <h2 class="cx-card-title">Registered logins</h2>
+    <div class="cx-table-wrap">
+        <table class="cx-table">
+            <thead><tr><th>Provider</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var login in currentLogins)
                 {
-                    <form @formname="@($"remove-login-{context.LoginProvider}")" @onsubmit="OnSubmitAsync" method="post">
-                        <AntiforgeryToken />
-                        <input type="hidden" name="@nameof(LoginProvider)" value="@context.LoginProvider" />
-                        <input type="hidden" name="@nameof(ProviderKey)" value="@context.ProviderKey" />
-                        <MudButton ButtonType="ButtonType.Submit" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
-                                   title="@($"Remove this {context.ProviderDisplayName} login from your account")">Remove</MudButton>
-                    </form>
+                    <tr>
+                        <td>@login.ProviderDisplayName</td>
+                        <td class="cx-row-actions">
+                            @if (showRemoveButton)
+                            {
+                                <form @formname="@($"remove-login-{login.LoginProvider}")" @onsubmit="OnSubmitAsync" method="post" style="display:inline">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="@nameof(LoginProvider)" value="@login.LoginProvider" />
+                                    <input type="hidden" name="@nameof(ProviderKey)" value="@login.ProviderKey" />
+                                    <button type="submit" class="cx-btn cx-btn-danger cx-btn-sm" title="@($"Remove this {login.ProviderDisplayName} login from your account")">Remove</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
                 }
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+            </tbody>
+        </table>
+    </div>
 }
 @if (otherLogins?.Count > 0)
 {
-    <MudText Typo="Typo.h6" Class="mb-2">Add another service to log in.</MudText>
+    <h3 class="cx-card-title" style="margin-top:6px">Add another service to log in</h3>
     <form action="Account/Manage/LinkExternalLogin" method="post">
         <AntiforgeryToken />
-        <div class="d-flex" style="gap: 8px;">
+        <div class="cx-actions">
             @foreach (var provider in otherLogins)
             {
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" name="Provider" value="@provider.Name"
-                           title="@($"Log in using your {provider.DisplayName} account")">
-                    @provider.DisplayName
-                </MudButton>
+                <button type="submit" class="cx-btn cx-btn-primary" name="Provider" value="@provider.Name" title="@($"Log in using your {provider.DisplayName} account")">@provider.DisplayName</button>
             }
         </div>
     </form>

@@ -18,44 +18,81 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ICustomEmailSender EmailSender
 @inject DataManagementService DataManagementService
+@using CleanserBlazorUI.Services
 
 
 @attribute [Authorize(Roles = "admin, superuser")]
-@* @attribute [Authorize] *@
-<MudPaper Elevation="0" Style="min-height: 100vh; overflow: hidden; display: flex; background:var(--mud-palette-background);">
-    <!-- Left Column -->
-    <MudPaper Elevation="0" Style="flex: 1; display: flex; justify-content: center; align-items: center; background:var(--mud-palette-background);">
-        <MudPaper Class="pa-8" Outlined="true" Style="width: 100%; max-width: 420px; border-radius: 12px;">
-            <StatusMessage Message="@Message" />
-            <EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
-                <DataAnnotationsValidator />
-                <MudText Typo="Typo.h5" Class="mb-4"><b>Create a New Account</b></MudText>
-                <ValidationSummary class="text-danger" role="alert" />
 
-                <div class="login-field"><label for="fld-email">Email</label><InputText id="fld-email" @bind-Value="Input.Email" type="text" autocomplete="username" /><ValidationMessage For="() => Input.Email" class="text-danger" /></div>
-                <div class="login-field"><label for="fld-newuserroles">Roles</label><InputText id="fld-newuserroles" @bind-Value="Input.NewUserRoles" type="text" placeholder="admin, manager, superuser, user" /><ValidationMessage For="() => Input.NewUserRoles" class="text-danger" /></div>
-                <div class="login-field"><label for="fld-password">Password</label><InputText id="fld-password" @bind-Value="Input.Password" type="password" autocomplete="new-password" /><ValidationMessage For="() => Input.Password" class="text-danger" /></div>
-                <div class="login-field"><label for="fld-confirmpassword">Confirm Password</label><InputText id="fld-confirmpassword" @bind-Value="Input.ConfirmPassword" type="password" autocomplete="new-password" /><ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" /></div>
+<PageTitle>Register user · Cleanser</PageTitle>
 
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mb-4">Register</MudButton>
+<header class="cx-page-head">
+    <div>
+        <div class="cx-crumb">Accounts</div>
+        <h1>Register user</h1>
+        <p>New users sign in with the password you set here, then choose their own the first time they sign in.</p>
+    </div>
+</header>
 
-                <div class="d-flex justify-center">
-                    <MudLink Color="Color.Primary" href="@(NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">
-                        Already have an account? Log in
-                    </MudLink>
-                </div>
-            </EditForm>
-        </MudPaper>
-    </MudPaper>
+<EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register" class="cx-card" style="max-width:760px">
+    <DataAnnotationsValidator />
+    <StatusMessage Message="@Message" />
 
-    <!-- Right Column -->
-    <MudPaper Elevation="0" Style="flex: 1; background: var(--mud-palette-primary); width: 100%;" Class="d-none d-md-flex align-center justify-center">
-        <MudImage Src="logocolor.png" Width="220" />
-    </MudPaper>
-</MudPaper>
+    <div class="cx-form-grid">
+        <div class="cx-field">
+            <label for="reg-email">Email address</label>
+            <span class="cx-control">
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 7l9 6 9-6" /></svg>
+                <InputText id="reg-email" @bind-Value="Input.Email" type="email" autocomplete="off" placeholder="name@xdsdata.com" />
+            </span>
+            <ValidationMessage For="() => Input.Email" class="cx-error" />
+        </div>
+
+        <div class="cx-field">
+            <label for="reg-role">Role</label>
+            <span class="cx-control">
+                <InputSelect id="reg-role" @bind-Value="Input.NewUserRoles">
+                    <option value="">Select a role</option>
+                    @foreach (var role in RoleOptions)
+                    {
+                        <option value="@role">@RoleLabels.For(role)</option>
+                    }
+                </InputSelect>
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            </span>
+            <ValidationMessage For="() => Input.NewUserRoles" class="cx-error" />
+        </div>
+
+        <div class="cx-field">
+            <label for="reg-password">Temporary password</label>
+            <span class="cx-control">
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V8a4 4 0 018 0v3" /></svg>
+                <InputText id="reg-password" @bind-Value="Input.Password" type="password" autocomplete="new-password" />
+            </span>
+            <ValidationMessage For="() => Input.Password" class="cx-error" />
+        </div>
+
+        <div class="cx-field">
+            <label for="reg-confirm">Confirm password</label>
+            <span class="cx-control">
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V8a4 4 0 018 0v3" /></svg>
+                <InputText id="reg-confirm" @bind-Value="Input.ConfirmPassword" type="password" autocomplete="new-password" />
+            </span>
+            <ValidationMessage For="() => Input.ConfirmPassword" class="cx-error" />
+        </div>
+    </div>
+
+    <p class="cx-hint" style="margin:0">At least 8 characters, with upper and lower case letters, a number and a symbol.</p>
+
+    <div class="cx-actions">
+        <button type="submit" class="cx-btn cx-btn-primary"><svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 12a4 4 0 100-8 4 4 0 000 8zM2 20c0-3.3 3.6-6 8-6 1.4 0 2.7.3 3.8.7M19 14v6M16 17h6" /></svg> Register user</button>
+        <a class="cx-btn cx-btn-ghost" href="Manageroles">Cancel</a>
+    </div>
+</EditForm>
 
 
 @code {
+
+    private static readonly string[] RoleOptions = { "user", "manager", "superuser", "admin" };
 
     private IEnumerable<IdentityError>? identityErrors;
 
@@ -93,6 +130,14 @@
             // (matched by email) -- legacy accounts are set manually instead.
             await DataManagementService.AutoPopulateReceivedTransUserIdAsync(getNewlycreateduser.Id, _useremail);
 
+            // The role the admin picked on this screen (it used to be checked but never saved).
+            var chosenRole = await UserManager.AddToRoleAsync(getNewlycreateduser, Input.NewUserRoles);
+            if (!chosenRole.Succeeded)
+            {
+                Logger.LogError("Failed to add role '{Role}' to newly created user '{Email}': {Errors}", Input.NewUserRoles, Input.Email, string.Join(", ", chosenRole.Errors.Select(e => e.Description)));
+            }
+
+            // Every new account must choose its own password at first sign-in (see PasswordChangeMiddleware).
             var roleResult = await UserManager.AddToRoleAsync(getNewlycreateduser, "MustChangePassword");
             if (roleResult.Succeeded)
             {
@@ -120,7 +165,7 @@
                 new() { ["email"] = Input.Email, ["returnUrl"] = ReturnUrl });
         }
 
-        RedirectManager.RedirectTo("Manageroles");
+        RedirectManager.RedirectTo("Manageroles", new() { ["registered"] = Input.Email });
     }
 
     private ApplicationUser CreateUser()
@@ -196,7 +241,7 @@
         public string NewUserRoles { get; set; } = "";
 
         [Required]
-        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 8)]
         [DataType(DataType.Password)]
         [Display(Name = "Password")]
         public string Password { get; set; } = "";

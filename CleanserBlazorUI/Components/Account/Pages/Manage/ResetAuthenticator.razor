@@ -12,16 +12,14 @@
 <PageTitle>Reset authenticator key</PageTitle>
 
 <StatusMessage />
-<MudText Typo="Typo.h5" Class="mb-4">Reset authenticator key</MudText>
-<MudAlert Severity="MudBlazor.Severity.Warning" Class="mb-4">
-    <strong>If you reset your authenticator key your authenticator app will not work until you reconfigure it.</strong>
+<h2 class="cx-card-title">Reset authenticator key</h2>
+<div class="cx-alert warn"><span><strong>If you reset your authenticator key your authenticator app will not work until you reconfigure it.</strong>
     <br />
     This process disables 2FA until you verify your authenticator app.
-    If you do not complete your authenticator app configuration you may lose access to your account.
-</MudAlert>
+    If you do not complete your authenticator app configuration you may lose access to your account.</span></div>
 <form @formname="reset-authenticator" @onsubmit="OnSubmitAsync" method="post">
     <AntiforgeryToken />
-    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Error">Reset authenticator key</MudButton>
+    <button type="submit" class="cx-btn cx-btn-danger">Reset authenticator key</button>
 </form>
 
 @code {

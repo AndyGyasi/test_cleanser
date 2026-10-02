@@ -16,18 +16,16 @@
 }
 else
 {
-    <MudText Typo="Typo.h5" Class="mb-4">Generate two-factor authentication (2FA) recovery codes</MudText>
-    <MudAlert Severity="MudBlazor.Severity.Warning" Class="mb-4">
-        <strong>Put these codes in a safe place.</strong>
+    <h2 class="cx-card-title">Generate two-factor authentication (2FA) recovery codes</h2>
+    <div class="cx-alert warn"><span><strong>Put these codes in a safe place.</strong>
         <br />
         If you lose your device and don't have the recovery codes you will lose access to your account.
         <br />
         Generating new recovery codes does not change the keys used in authenticator apps. If you wish to change the key
-        used in an authenticator app you should <MudLink Href="Account/Manage/ResetAuthenticator">reset your authenticator keys</MudLink>.
-    </MudAlert>
+        used in an authenticator app you should <a href="Account/Manage/ResetAuthenticator">reset your authenticator keys</a>.</span></div>
     <form @formname="generate-recovery-codes" @onsubmit="OnSubmitAsync" method="post">
         <AntiforgeryToken />
-        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Error">Generate Recovery Codes</MudButton>
+        <button type="submit" class="cx-btn cx-btn-danger">Generate Recovery Codes</button>
     </form>
 }
 
