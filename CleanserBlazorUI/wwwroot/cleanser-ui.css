@@ -126,6 +126,7 @@ svg.cx-ic { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: curre
 .cx-control:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); color: var(--brand); }
 .cx-control input { flex-grow: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; }
 .cx-control input.valid, .cx-control input.invalid, .cx-control input.modified { outline: 0; }
+.cx-control input.valid.modified:not([type="checkbox"]) { outline: 0; }  /* beats the old global "modified" outline in app.css */
 .cx-control:has(input.invalid) { border-color: var(--danger-border); }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.8; }
 .cx-icon-btn { width: 40px; height: 40px; border-radius: 10px; border: 0; background: transparent; color: var(--sub); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.15s, color 0.15s; }

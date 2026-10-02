@@ -11,6 +11,11 @@ namespace CleanserBlazorUI.Data
         // hidden shadow property; nothing can read it.
         // public bool MustChangePassword { get; set; } = false;
 
+        // When the account's current *temporary* password was set (at registration, or by an
+        // admin's Reset password). Null once the person has chosen their own. A temporary
+        // password stops working TemporaryPassword.Lifetime after this moment.
+        public DateTime? TemporaryPasswordSetUtc { get; set; }
+
         // Corresponds to Ring.Users.UserID and Transact.ReceivedTrans.AssignTo
         // in the XDSDataLogDB database -- identifies which files (by filename,
         // via Transact.ReceivedTrans) this person is allowed to run through

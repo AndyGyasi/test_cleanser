@@ -13,6 +13,45 @@
         btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
     });
 
+
+    // Admin screens: fill password fields with a server-generated strong password, and copy it.
+    // Copy falls back to a hidden selection because navigator.clipboard only exists on https/localhost.
+    function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+        return new Promise(function (resolve, reject) {
+            const ta = document.createElement("textarea");
+            ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand("copy") ? resolve() : reject(); } catch (e) { reject(e); } finally { document.body.removeChild(ta); }
+        });
+    }
+    function flash(btn, text) {
+        const label = btn.getAttribute("title"); btn.setAttribute("title", text);
+        setTimeout(function () { label ? btn.setAttribute("title", label) : btn.removeAttribute("title"); }, 1500);
+    }
+    document.addEventListener("click", async function (e) {
+        const gen = e.target.closest('[data-cx="gen-password"]');
+        if (gen) {
+            try {
+                const r = await fetch("/api/password/generate", { credentials: "same-origin", cache: "no-store" });
+                if (!r.ok) return;
+                const pw = (await r.text()).trim();
+                gen.dataset.targets.split(",").forEach(function (id) {
+                    const input = document.getElementById(id);
+                    if (!input) return;
+                    input.value = pw; input.type = "text";
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                });
+            } catch (err) { /* offline: nothing to do */ }
+            return;
+        }
+        const cp = e.target.closest('[data-cx="copy"]');
+        if (cp) {
+            const input = document.getElementById(cp.dataset.target);
+            if (input && input.value) copyText(input.value).then(function () { flash(cp, "Copied"); }, function () { flash(cp, "Could not copy"); });
+        }
+    });
+
     function initForm(form) {
         if (form.dataset.cxReady) return;
         form.dataset.cxReady = "1";

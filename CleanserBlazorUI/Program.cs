@@ -36,7 +36,6 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AllowAnonymousToPage("/Account/Login");
     options.Conventions.AllowAnonymousToPage("/Account/Register");
     options.Conventions.AllowAnonymousToPage("/Account/ForgotPassword");
-    options.Conventions.AllowAnonymousToPage("/Account/ResetPassword");
 });
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -265,6 +264,14 @@ app.MapRazorComponents<App>()
 
 
 app.MapAdditionalIdentityEndpoints();
+
+// One source of truth for generated temporary passwords (Register user's Generate button).
+// Only people who can create accounts may ask; never cached.
+app.MapGet("/api/password/generate", (HttpContext context) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Text(TemporaryPassword.Generate());
+}).RequireAuthorization(policy => policy.RequireRole("admin", "superuser"));
 
 // Called by _session.js while the user is active; the request itself is what
 // refreshes the idle timer (see SessionIdle). 401 = the session has ended.

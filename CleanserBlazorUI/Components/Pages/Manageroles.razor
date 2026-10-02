@@ -6,6 +6,7 @@
 @using CleanserBlazorUI.Data
 @using CleanserBlazorUI.Services
 @inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @attribute [Authorize(Roles = "admin")]
 
 <PageTitle>Manage users · Cleanser</PageTitle>
@@ -39,7 +40,52 @@
 }
 else if (!string.IsNullOrWhiteSpace(Registered))
 {
-    <div class="cx-alert ok" role="status" style="margin-bottom:18px">Account created for @Registered. They will be asked to choose their own password the first time they sign in.</div>
+    <div class="cx-alert ok" role="status" style="margin-bottom:18px">Account created for @Registered. Give them the temporary password yourself (it is not emailed). It works for @((int)TemporaryPassword.Lifetime.TotalDays) days, and they choose their own the first time they sign in.</div>
+}
+
+@if (resetting is not null)
+{
+    <EditForm Model="ResetInput" OnValidSubmit="ResetPasswordAsync" class="cx-card" style="max-width:560px;margin-bottom:18px">
+        <DataAnnotationsValidator />
+        <h2>Reset password</h2>
+
+        @if (resetDone)
+        {
+            <div class="cx-alert ok" role="status"><span>Done. Give the temporary password to <strong>@resetting.Email</strong> yourself; it is not emailed. It works until <strong>@TemporaryPassword.ExpiresUtc(resetUser!)?.ToLocalTime().ToString("d MMM yyyy, HH:mm")</strong>, and they will choose their own the next time they sign in.</span></div>
+        }
+        else
+        {
+            <p class="cx-sub" style="margin:0">Sets a new temporary password for <strong>@resetting.Email</strong>. Their old password stops working, and they must choose their own at next sign-in.</p>
+        }
+
+        <div class="cx-field">
+            <span class="cx-field-row">
+                <label for="reset-password">Temporary password</label>
+                @if (!resetDone)
+                {
+                    <button type="button" class="cx-linkbtn" @onclick="GenerateReset"><svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" /></svg> Generate</button>
+                }
+            </span>
+            <span class="cx-control">
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V8a4 4 0 018 0v3" /></svg>
+                <InputText id="reset-password" @bind-Value="ResetInput.Password" type="text" autocomplete="off" readonly="@resetDone" />
+                <button type="button" class="cx-icon-btn cx-eye" data-cx="copy" data-target="reset-password" aria-label="Copy password" title="Copy"><svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v11H9zM5 15V4h10" /></svg></button>
+            </span>
+            <ValidationMessage For="() => ResetInput.Password" class="cx-error" />
+        </div>
+
+        <div class="cx-actions">
+            @if (resetDone)
+            {
+                <button type="button" class="cx-btn cx-btn-primary" @onclick="CloseReset">Done</button>
+            }
+            else
+            {
+                <button type="submit" class="cx-btn cx-btn-primary">Set temporary password</button>
+                <button type="button" class="cx-btn cx-btn-ghost" @onclick="CloseReset">Cancel</button>
+            }
+        </div>
+    </EditForm>
 }
 
 @if (editing is not null)
@@ -129,9 +175,16 @@ else if (!string.IsNullOrWhiteSpace(Registered))
                                     }
                                 }
                             </td>
-                            <td><span class="cx-pill @row.StatusTone">@row.Status</span></td>
+                            <td>
+                                <span class="cx-pill @row.StatusTone">@row.Status</span>
+                                @if (row.Hint is not null)
+                                {
+                                    <div class="cx-hint" style="margin-top:4px">@row.Hint</div>
+                                }
+                            </td>
                             <td class="cx-row-actions">
                                 <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@row.IsProtected" @onclick="() => StartEdit(row)">Edit role</button>
+                                <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@(row.IsProtected || row.IsMe)" title="@(row.IsMe ? "Change your own password under My account" : null)" @onclick="() => StartReset(row)">Reset password</button>
                                 <button type="button" class="cx-btn cx-btn-danger cx-btn-sm" disabled="@row.IsProtected" @onclick="() => DeleteAsync(row)">Delete</button>
                             </td>
                         </tr>
@@ -153,6 +206,11 @@ else if (!string.IsNullOrWhiteSpace(Registered))
 
     private List<UserRow> rows = new();
     private UserRow? editing;
+    private UserRow? resetting;
+    private ApplicationUser? resetUser;
+    private bool resetDone;
+    private ResetModel ResetInput = new();
+    private string myEmail = "";
     private UserRow? pendingDelete;
     private MudMessageBox deleteBox = default!;
     private InputModel Input = new();
@@ -166,7 +224,11 @@ else if (!string.IsNullOrWhiteSpace(Registered))
         : rows.Where(r => r.Email.Contains(search, StringComparison.OrdinalIgnoreCase)
                           || r.Roles.Any(role => RoleLabels.For(role).Contains(search, StringComparison.OrdinalIgnoreCase))).ToList();
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        myEmail = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User.Identity?.Name ?? "";
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -180,7 +242,9 @@ else if (!string.IsNullOrWhiteSpace(Registered))
                 Email = user.Email ?? user.UserName ?? "",
                 Roles = roles.Where(r => !IsMustChange(r)).ToList(),
                 Pending = roles.Any(IsMustChange),
-                Locked = user.LockoutEnd is { } until && until > DateTimeOffset.UtcNow
+                Locked = user.LockoutEnd is { } until && until > DateTimeOffset.UtcNow,
+                ExpiresUtc = roles.Any(IsMustChange) ? TemporaryPassword.ExpiresUtc(user) : null,
+                IsMe = string.Equals(user.Email, myEmail, StringComparison.OrdinalIgnoreCase)
             });
         }
         rows = loaded;
@@ -200,12 +264,75 @@ else if (!string.IsNullOrWhiteSpace(Registered))
     private void StartEdit(UserRow row)
     {
         if (row.IsProtected) return;
+        resetting = null;
         editing = row;
         Input = new InputModel { Email = row.Email, NewUserRoles = row.Roles.FirstOrDefault() ?? "" };
         statusMessage = null;
     }
 
     private void CancelEdit() => editing = null;
+
+    // ---- Reset password: an admin gives a person a new temporary password (no email involved) ----
+
+    private void StartReset(UserRow row)
+    {
+        if (row.IsProtected || row.IsMe) return;
+        editing = null;
+        resetting = row;
+        resetUser = null;
+        resetDone = false;
+        ResetInput = new ResetModel { Password = TemporaryPassword.Generate() };
+        statusMessage = null;
+    }
+
+    private void GenerateReset() => ResetInput.Password = TemporaryPassword.Generate();
+
+    private void CloseReset()
+    {
+        resetting = null;
+        resetUser = null;
+        resetDone = false;
+        ResetInput = new ResetModel();
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (resetting is null || resetting.IsProtected || resetting.IsMe) return;
+
+        var user = await UserManager.FindByEmailAsync(resetting.Email);
+        if (user is null)
+        {
+            Say("That user no longer exists.", error: true);
+            CloseReset();
+            await LoadAsync();
+            return;
+        }
+
+        // Works without knowing the old password; changes the security stamp, which also
+        // ends any sessions the old password had open.
+        var token = await UserManager.GeneratePasswordResetTokenAsync(user);
+        var result = await UserManager.ResetPasswordAsync(user, token, ResetInput.Password);
+        if (!result.Succeeded)
+        {
+            Say($"Could not set the password: {string.Join(" ", result.Errors.Select(e => e.Description))}", error: true);
+            return; // keep the panel open so the admin can pick another
+        }
+
+        // The person must choose their own at next sign-in, within the temporary password's lifetime.
+        if (!await UserManager.IsInRoleAsync(user, PasswordChangeMiddleware.RoleName))
+        {
+            await UserManager.AddToRoleAsync(user, PasswordChangeMiddleware.RoleName);
+        }
+        user.TemporaryPasswordSetUtc = DateTime.UtcNow;
+        await UserManager.UpdateAsync(user);
+        await UserManager.SetLockoutEndDateAsync(user, null);   // a reset also lifts a lock-out
+        await UserManager.ResetAccessFailedCountAsync(user);
+
+        statusMessage = null;
+        resetUser = user;
+        resetDone = true;
+        await LoadAsync();
+    }
 
     private async Task UpdateRoleAsync()
     {
@@ -269,10 +396,25 @@ else if (!string.IsNullOrWhiteSpace(Registered))
         public bool Pending { get; set; }
         public bool Locked { get; set; }
 
+        public DateTime? ExpiresUtc { get; set; }
+        public bool IsMe { get; set; }
+
+        public bool Expired => Pending && ExpiresUtc is { } until && until < DateTime.UtcNow;
+        public string? Hint => !Pending || ExpiresUtc is not { } until
+            ? null
+            : Expired ? $"Expired {until.ToLocalTime():d MMM, HH:mm}. Reset the password." : $"Expires {until.ToLocalTime():d MMM, HH:mm}";
+
         public string Initial => Email.Length > 0 ? Email[..1].ToUpperInvariant() : "?";
         public bool IsProtected => string.Equals(Email, ProtectedAccount, StringComparison.OrdinalIgnoreCase);
-        public string Status => Locked ? "Locked" : Pending ? "Pending password" : "Active";
-        public string StatusTone => Locked ? "bad" : Pending ? "warn" : "ok";
+        public string Status => Locked ? "Locked" : Expired ? "Password expired" : Pending ? "Pending password" : "Active";
+        public string StatusTone => Locked || Expired ? "bad" : Pending ? "warn" : "ok";
+    }
+
+    private sealed class ResetModel
+    {
+        [Required(ErrorMessage = "Enter or generate a temporary password.")]
+        [StringLength(100, MinimumLength = 8, ErrorMessage = "The temporary password must be at least 8 characters long.")]
+        public string Password { get; set; } = "";
     }
 
     private sealed class InputModel

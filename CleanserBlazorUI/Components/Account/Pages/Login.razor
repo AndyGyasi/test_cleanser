@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
 @using CleanserBlazorUI.Data
+@using CleanserBlazorUI.Services
 @inject SignInManager<ApplicationUser> SignInManager
 @inject ILogger<Login> Logger
 @inject IdentityRedirectManager RedirectManager
@@ -58,8 +59,8 @@
         </button>
 
         <p class="cx-auth-note">
-            Haven't signed in for a while, or can't remember your password?
-            <a href="Account/ForgotPassword">Reset it here</a>.
+            Forgot your password, or haven't signed in for a while?
+            <a href="Account/ForgotPassword">Ask an administrator to reset it</a>.
         </p>
     </EditForm>
 </AuthShell>
@@ -90,6 +91,20 @@
 
     public async Task LoginUser()
     {
+        // A temporary password handed over by an admin only works for TemporaryPassword.Lifetime.
+        // The message is shown only to someone who typed the right password, so it tells
+        // nobody else anything about the account.
+        var waiting = await SignInManager.UserManager.FindByEmailAsync(Input.Email);
+        if (waiting is not null
+            && TemporaryPassword.IsExpired(waiting)
+            && await SignInManager.UserManager.IsInRoleAsync(waiting, PasswordChangeMiddleware.RoleName)
+            && (await SignInManager.CheckPasswordSignInAsync(waiting, Input.Password, lockoutOnFailure: false)).Succeeded)
+        {
+            Logger.LogWarning("Expired temporary password used by '{Email}'.", Input.Email);
+            errorMessage = "Error: Your temporary password has expired. Ask an administrator to reset it.";
+            return;
+        }
+
         // Sessions are never persistent: closing the browser or sitting idle
         // past the admin-set limit ends them. This doesn't count login failures
         // towards account lockout; to enable that, set lockoutOnFailure: true.

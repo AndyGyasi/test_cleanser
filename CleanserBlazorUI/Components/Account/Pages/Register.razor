@@ -1,9 +1,6 @@
 ﻿@page "/Account/Register"
 
 @using System.ComponentModel.DataAnnotations
-@using System.Text
-@using System.Text.Encodings.Web
-@using ICleanserBlazorUI.Interface
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
 @using CleanserBlazorUI.Data
@@ -16,7 +13,6 @@
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
-@inject ICustomEmailSender EmailSender
 @inject DataManagementService DataManagementService
 @using CleanserBlazorUI.Services
 
@@ -29,7 +25,7 @@
     <div>
         <div class="cx-crumb">Accounts</div>
         <h1>Register user</h1>
-        <p>New users sign in with the password you set here, then choose their own the first time they sign in.</p>
+        <p>Give the new user the temporary password yourself, as nothing is emailed. It works for 3 days, and they choose their own the first time they sign in.</p>
     </div>
 </header>
 
@@ -63,10 +59,15 @@
         </div>
 
         <div class="cx-field">
-            <label for="reg-password">Temporary password</label>
+            <span class="cx-field-row">
+                <label for="reg-password">Temporary password</label>
+                <button type="button" class="cx-linkbtn" data-cx="gen-password" data-targets="reg-password,reg-confirm"><svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" /></svg> Generate</button>
+            </span>
             <span class="cx-control">
                 <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V8a4 4 0 018 0v3" /></svg>
                 <InputText id="reg-password" @bind-Value="Input.Password" type="password" autocomplete="new-password" />
+                <button type="button" class="cx-icon-btn cx-eye" data-cx="copy" data-target="reg-password" aria-label="Copy password" title="Copy"><svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v11H9zM5 15V4h10" /></svg></button>
+                <button type="button" class="cx-icon-btn cx-eye" data-cx="show-pw" data-target="reg-password" aria-label="Show password" title="Show"><svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z" /></svg></button>
             </span>
             <ValidationMessage For="() => Input.Password" class="cx-error" />
         </div>
@@ -81,7 +82,7 @@
         </div>
     </div>
 
-    <p class="cx-hint" style="margin:0">At least 8 characters, with upper and lower case letters, a number and a symbol.</p>
+    <p class="cx-hint" style="margin:0">Generate makes a strong one for you. Copy it before you register, as it cannot be shown again afterwards. At least 8 characters, with upper and lower case letters, a number and a symbol.</p>
 
     <div class="cx-actions">
         <button type="submit" class="cx-btn cx-btn-primary"><svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 12a4 4 0 100-8 4 4 0 000 8zM2 20c0-3.3 3.6-6 8-6 1.4 0 2.7.3 3.8.7M19 14v6M16 17h6" /></svg> Register user</button>
@@ -113,6 +114,7 @@
         var emailStore = GetEmailStore();
         await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
         user.EmailConfirmed = true;
+        user.TemporaryPasswordSetUtc = DateTime.UtcNow; // the password the admin hands over expires after TemporaryPassword.Lifetime
         var result = await UserManager.CreateAsync(user, Input.Password);
 
         var _useremail = Input.Email;
@@ -151,12 +153,7 @@
 
         Logger.LogInformation("User '{Email}' created a new account with password.", Input.Email);
 
-        var userId = await UserManager.GetUserIdAsync(user);
-        var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
-        code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-        var callbackUrl = NavigationManager.BaseUri + "Account/Login";
-        await EmailSender.SendEmailAsync(user.Email, $"Cleanser Account Registration_{Input.Password}", callbackUrl);
-        Logger.LogInformation("Registration email sent to user '{Email}'.", Input.Email);
+        // Nothing is emailed: the admin gives the temporary password to the person directly.
 
         if (UserManager.Options.SignIn.RequireConfirmedAccount)
         {
