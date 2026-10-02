@@ -1716,7 +1716,7 @@ public class DataManagementService
     }
 
     // Records one file cleaned with "Clean only" ticked. Purely for admin visibility.
-    public async Task RecordCleanOnlyRunAsync(string filename, string performedByEmail, bool fileInReceivedTrans, string? assignedToEmail, string accessBasis)
+    public async Task RecordCleanOnlyRunAsync(string filename, string performedByEmail, bool fileInReceivedTrans, string? assignedToEmail, string accessBasis, string? purpose = null)
     {
         var (dataProvider, subCode, subXDSCode, subCategoryCode) = await GetDataProviderInfoForFilenameAsync(filename);
 
@@ -1731,14 +1731,65 @@ public class DataManagementService
             PerformedDate = DateTime.Now,
             FileInReceivedTrans = fileInReceivedTrans,
             AssignedToEmail = assignedToEmail,
-            AccessBasis = accessBasis
+            AccessBasis = accessBasis,
+            Purpose = purpose
         });
         await _context.SaveChangesAsync();
     }
 
     // The dashboard's "Recent cleaning runs": the two logs side by side, newest first. Pass an email to see
     // only that person's runs (non-admins), or null for everyone's (admins).
-    public async Task<List<CleaningRunRow>> GetRecentCleaningRunsAsync(string? onlyEmail, int take = 100)
+    public async Task<List<CleaningRunRow>> GetRecentCleaningRunsAsync(string? onlyEmail, string? dataProvider = null, string? categoryCode = null,
+        DateTime? from = null, DateTime? to = null, string? associate = null, int take = 200)
+    {
+        var withRef = _context.DataLoggingCleaningPurposeLogs.AsNoTracking().AsQueryable();
+        var cleanOnly = _context.DataLoggingCleanOnlyLogs.AsNoTracking().AsQueryable();
+        // an ordinary user is always limited to their own runs; the Associate filter only applies to admins
+        var who = onlyEmail ?? (string.IsNullOrWhiteSpace(associate) ? null : associate);
+        if (who != null)
+        {
+            withRef = withRef.Where(l => l.PerformedByEmail == who);
+            cleanOnly = cleanOnly.Where(l => l.PerformedByEmail == who);
+        }
+        if (!string.IsNullOrWhiteSpace(dataProvider))
+        {
+            withRef = withRef.Where(l => l.DataProvider == dataProvider);
+            cleanOnly = cleanOnly.Where(l => l.DataProvider == dataProvider);
+        }
+        if (!string.IsNullOrWhiteSpace(categoryCode))
+        {
+            withRef = withRef.Where(l => l.SubCategoryCode == categoryCode);
+            cleanOnly = cleanOnly.Where(l => l.SubCategoryCode == categoryCode);
+        }
+        if (from != null)
+        {
+            var f = from.Value.Date;
+            withRef = withRef.Where(l => l.PerformedDate >= f);
+            cleanOnly = cleanOnly.Where(l => l.PerformedDate >= f);
+        }
+        if (to != null)
+        {
+            var t = to.Value.Date.AddDays(1);   // the chosen day is included
+            withRef = withRef.Where(l => l.PerformedDate < t);
+            cleanOnly = cleanOnly.Where(l => l.PerformedDate < t);
+        }
+
+        var a = (await withRef.OrderByDescending(l => l.PerformedDate).Take(take).ToListAsync())
+            .Select(l => new CleaningRunRow { Kind = "Cleaned with reference check", Filename = l.Filename, DataProvider = l.DataProvider, SubCategoryCode = l.SubCategoryCode, PerformedByEmail = l.PerformedByEmail, PerformedDate = l.PerformedDate, Detail = l.Purpose });
+        var b = (await cleanOnly.OrderByDescending(l => l.PerformedDate).Take(take).ToListAsync())
+            .Select(l => new CleaningRunRow
+            {
+                Kind = l.FileInReceivedTrans ? "Re-cleaned" : "Clean only",
+                Filename = l.Filename, DataProvider = l.DataProvider, SubCategoryCode = l.SubCategoryCode, PerformedByEmail = l.PerformedByEmail, PerformedDate = l.PerformedDate,
+                Detail = l.FileInReceivedTrans
+                    ? (string.IsNullOrWhiteSpace(l.Purpose) ? l.AccessBasis : $"{l.Purpose} ({l.AccessBasis})")
+                    : "Not in ReceivedTrans"
+            });
+        return a.Concat(b).OrderByDescending(r => r.PerformedDate).Take(take).ToList();
+    }
+
+    // Values for the list's filter drop-downs, from the runs this person may see (null email = everyone's).
+    public async Task<CleaningRunFilterOptions> GetCleaningRunFilterOptionsAsync(string? onlyEmail)
     {
         var withRef = _context.DataLoggingCleaningPurposeLogs.AsNoTracking().AsQueryable();
         var cleanOnly = _context.DataLoggingCleanOnlyLogs.AsNoTracking().AsQueryable();
@@ -1747,17 +1798,15 @@ public class DataManagementService
             withRef = withRef.Where(l => l.PerformedByEmail == onlyEmail);
             cleanOnly = cleanOnly.Where(l => l.PerformedByEmail == onlyEmail);
         }
-
-        var a = (await withRef.OrderByDescending(l => l.PerformedDate).Take(take).ToListAsync())
-            .Select(l => new CleaningRunRow { Kind = "Cleaned with reference check", Filename = l.Filename, DataProvider = l.DataProvider, PerformedByEmail = l.PerformedByEmail, PerformedDate = l.PerformedDate, Detail = l.Purpose });
-        var b = (await cleanOnly.OrderByDescending(l => l.PerformedDate).Take(take).ToListAsync())
-            .Select(l => new CleaningRunRow
-            {
-                Kind = l.FileInReceivedTrans ? "Re-cleaned" : "Clean only",
-                Filename = l.Filename, DataProvider = l.DataProvider, PerformedByEmail = l.PerformedByEmail, PerformedDate = l.PerformedDate,
-                Detail = l.FileInReceivedTrans ? l.AccessBasis : "Not in ReceivedTrans"
-            });
-        return a.Concat(b).OrderByDescending(r => r.PerformedDate).Take(take).ToList();
+        var p1 = await withRef.Select(l => new { l.DataProvider, l.SubCategoryCode, l.PerformedByEmail }).Distinct().ToListAsync();
+        var p2 = await cleanOnly.Select(l => new { l.DataProvider, l.SubCategoryCode, l.PerformedByEmail }).Distinct().ToListAsync();
+        var all = p1.Concat(p2).ToList();
+        return new CleaningRunFilterOptions
+        {
+            DataProviders = all.Select(x => x.DataProvider).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x).ToList(),
+            CategoryCodes = all.Select(x => x.SubCategoryCode ?? string.Empty).Where(x => x.Length > 0).Distinct().OrderBy(x => x).ToList(),
+            Associates = all.Select(x => x.PerformedByEmail).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x).ToList()
+        };
     }
 
     public async Task<List<DataLoggingCleaningPurposeLog>> GetCleaningPurposeLogAsync()

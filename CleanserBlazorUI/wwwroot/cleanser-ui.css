@@ -427,3 +427,5 @@ html .cx-btn-danger:hover { background: var(--danger-bg); }
 .cx-filter-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--input-border); background: transparent; color: var(--sub); font: inherit; font-size: 13px; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
 .cx-filter-btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--input-border)); }
 .cx-filter-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-color: var(--accent); color: var(--text); font-weight: 500; }
+.cx-run-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; align-items: end; }
+.cx-run-filters .cx-select, .cx-run-filters .cx-input { max-width: none; width: 100%; }

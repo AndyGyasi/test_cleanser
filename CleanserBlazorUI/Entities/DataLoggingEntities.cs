@@ -211,6 +211,8 @@ public class DataLoggingCleanOnlyLog
     public string? AssignedToEmail { get; set; }
     // "Not in ReceivedTrans", "Owner", "Admin" or "Approved access"
     public string AccessBasis { get; set; } = string.Empty;
+    // The purpose chosen in the pop-up; asked only when the file is already in ReceivedTrans (a re-clean).
+    public string? Purpose { get; set; }
 }
 
 /// <summary>One line of the dashboard's "Recent cleaning runs" list.</summary>
@@ -220,7 +222,16 @@ public class CleaningRunRow
     public string Kind { get; set; } = string.Empty;
     public string Filename { get; set; } = string.Empty;
     public string DataProvider { get; set; } = string.Empty;
+    public string? SubCategoryCode { get; set; }
     public string PerformedByEmail { get; set; } = string.Empty;
     public DateTime PerformedDate { get; set; }
     public string Detail { get; set; } = string.Empty;
+}
+
+/// <summary>Choices for the list's filters, taken from the runs the person is allowed to see.</summary>
+public class CleaningRunFilterOptions
+{
+    public List<string> DataProviders { get; set; } = new();
+    public List<string> CategoryCodes { get; set; } = new();
+    public List<string> Associates { get; set; } = new();
 }

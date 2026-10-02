@@ -203,6 +203,39 @@
                 </button>
             }
         </div>
+        <div class="cx-run-filters">
+            <label class="cx-field">Data provider
+                <select class="cx-select" @bind="runProvider" @bind:after="LoadRecentRunsAsync">
+                    <option value="">All providers</option>
+                    @foreach (var p in runOptions.DataProviders) { <option value="@p">@p</option> }
+                </select>
+            </label>
+            <label class="cx-field">Subscriber category
+                <select class="cx-select" @bind="runCategory" @bind:after="LoadRecentRunsAsync">
+                    <option value="">All categories</option>
+                    @foreach (var c in runOptions.CategoryCodes) { <option value="@c">@CategoryLabel(c)</option> }
+                </select>
+            </label>
+            <label class="cx-field">Date cleaned, from
+                <input class="cx-input" type="date" @bind="runFrom" @bind:after="LoadRecentRunsAsync" />
+            </label>
+            <label class="cx-field">Date cleaned, to
+                <input class="cx-input" type="date" @bind="runTo" @bind:after="LoadRecentRunsAsync" />
+            </label>
+            @if (runsShowEveryone)
+            {
+                <label class="cx-field">Associate (who cleaned)
+                    <select class="cx-select" @bind="runAssociate" @bind:after="LoadRecentRunsAsync">
+                        <option value="">Everyone</option>
+                        @foreach (var a in runOptions.Associates) { <option value="@a">@a</option> }
+                    </select>
+                </label>
+            }
+            @if (AnyRunFilter)
+            {
+                <button type="button" class="cx-btn cx-btn-ghost cx-align-end" @onclick="async () => { ClearRunFilters(); await LoadRecentRunsAsync(); }">Clear filters</button>
+            }
+        </div>
         <p class="cx-sub">
             <strong>Cleaned with reference check</strong>: "Clean only" was not ticked.
             <strong>Clean only</strong>: ticked, file not yet in Transact.ReceivedTrans.
@@ -216,7 +249,7 @@
         {
             <div class="cx-table-wrap">
                 <table class="cx-table">
-                    <thead><tr><th>When</th><th>Type</th><th>File</th><th>Subscriber</th><th>By</th><th>Purpose / basis</th></tr></thead>
+                    <thead><tr><th>When</th><th>Type</th><th>File</th><th>Data provider</th><th>Category</th><th>By</th><th>Purpose / basis</th></tr></thead>
                     <tbody>
                         @foreach (var r in FilteredRuns)
                         {
@@ -225,6 +258,7 @@
                                 <td><span class="cx-pill">@r.Kind</span></td>
                                 <td>@r.Filename</td>
                                 <td>@r.DataProvider</td>
+                                <td>@(string.IsNullOrEmpty(r.SubCategoryCode) ? "" : CategoryLabel(r.SubCategoryCode))</td>
                                 <td>@r.PerformedByEmail</td>
                                 <td>@r.Detail</td>
                             </tr>
@@ -4650,7 +4684,7 @@
         // one file will actually be cleaned this run (a Clean-Only/preview
         // run, or a batch that's entirely blocked, never reaches this).
         string? cleaningPurpose = null;
-        if (!CleanOnlyOrCleanAndReference && decisions.Any(d => d.WillClean))
+        if (CleanOnlyOrCleanAndReference ? decisions.Any(d => d.WillClean && d.InReceivedTrans) : decisions.Any(d => d.WillClean))
         {
             var cleaningPurposeReasons = await DataManagementService.GetCleaningPurposeReasonsAsync();
             var dialogParams = new DialogParameters { ["Reasons"] = cleaningPurposeReasons };
@@ -4699,7 +4733,7 @@
                 string? assignedToEmail = decision.InReceivedTrans && !string.IsNullOrWhiteSpace(decision.AssignedUserId)
                     ? await DataManagementService.GetAssociateEmailForReceivedTransUserIdAsync(decision.AssignedUserId) ?? decision.AssignedUserId
                     : null;
-                await DataManagementService.RecordCleanOnlyRunAsync(decision.Filename, appUser?.Email ?? "unknown", decision.InReceivedTrans, assignedToEmail, decision.AccessBasis);
+                await DataManagementService.RecordCleanOnlyRunAsync(decision.Filename, appUser?.Email ?? "unknown", decision.InReceivedTrans, assignedToEmail, decision.AccessBasis, decision.InReceivedTrans ? cleaningPurpose : null);
             }
             else
             {
@@ -4763,12 +4797,25 @@
     List<CleaningRunRow> recentRuns = new();
     string runFilter = "All";
     bool runsShowEveryone;
+    string? runProvider, runCategory, runAssociate;
+    DateTime? runFrom, runTo;
+    CleaningRunFilterOptions runOptions = new();
+    Dictionary<string, string> runCategoryNames = new();
+    bool AnyRunFilter => !string.IsNullOrEmpty(runProvider) || !string.IsNullOrEmpty(runCategory) || !string.IsNullOrEmpty(runAssociate) || runFrom != null || runTo != null;
+    string CategoryLabel(string code) => runCategoryNames.TryGetValue(code, out var d) && !string.IsNullOrWhiteSpace(d) ? d : code;
+    void ClearRunFilters()
+    {
+        runProvider = runCategory = runAssociate = null; runFrom = runTo = null;
+    }
     async Task LoadRecentRunsAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var email = authState.User.Identity?.Name;
         runsShowEveryone = authState.User.IsInRole("admin");
-        recentRuns = await DataManagementService.GetRecentCleaningRunsAsync(runsShowEveryone ? null : email);
+        var only = runsShowEveryone ? null : email;
+        recentRuns = await DataManagementService.GetRecentCleaningRunsAsync(only, runProvider, runCategory, runFrom, runTo, runsShowEveryone ? runAssociate : null);
+        runOptions = await DataManagementService.GetCleaningRunFilterOptionsAsync(only);
+        if (runCategoryNames.Count == 0) runCategoryNames = await DataManagementService.GetSubscriberCategoryLookupAsync();
     }
     IEnumerable<CleaningRunRow> FilteredRuns => runFilter == "All" ? recentRuns : recentRuns.Where(r => r.Kind == runFilter);
 
