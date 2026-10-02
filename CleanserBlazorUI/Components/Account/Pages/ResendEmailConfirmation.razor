@@ -12,31 +12,42 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Resend email confirmation</PageTitle>
+<PageTitle>Resend email confirmation · Cleanser</PageTitle>
 
-<MudText Typo="Typo.h6">Resend email confirmation</MudText>
-<hr />
-<StatusMessage Message="@message" />
-<div class="row">
-    <div class="col-md-4">
-        <EditForm Model="Input" FormName="resend-email-confirmation" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" class="form-control" aria-required="true" placeholder="name@example.com" />
-                <label for="email" class="form-label">Email</label>
-                <ValidationMessage For="() => Input.Email" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Resend</button>
-        </EditForm>
-    </div>
-</div>
+<AuthShell Title="Resend email confirmation">
+    <EditForm Model="Input" FormName="resend-email-confirmation" OnValidSubmit="OnValidSubmitAsync" method="post" class="cx-auth-form">
+        <DataAnnotationsValidator />
+
+        <div>
+            <h2>Resend email confirmation</h2>
+            <p class="cx-lead" style="margin-top:8px">Enter your xdsdata email and we will send the confirmation link again.</p>
+        </div>
+
+        <StatusMessage Message="@message" />
+
+        <div class="cx-field">
+            <label for="rc-email">Email address</label>
+            <span class="cx-control">
+                <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 7l9 6 9-6" /></svg>
+                <InputText id="rc-email" @bind-Value="Input.Email" type="email" autocomplete="username" aria-required="true" placeholder="name@xdsdata.com" />
+            </span>
+            <ValidationMessage For="() => Input.Email" class="cx-error" />
+        </div>
+
+        <button type="submit" class="cx-btn cx-btn-primary cx-btn-block">
+            Resend link
+            <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+        </button>
+        <p class="cx-auth-note"><a href="Account/Login">Back to sign in</a></p>
+    </EditForm>
+</AuthShell>
 
 @code {
     private string? message;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get => _input ??= new(); set => _input = value; }
+    private InputModel? _input;
 
     private async Task OnValidSubmitAsync()
     {

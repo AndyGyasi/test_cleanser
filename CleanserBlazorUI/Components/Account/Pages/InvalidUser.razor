@@ -1,8 +1,14 @@
 ﻿@page "/Account/InvalidUser"
 
-<PageTitle>Invalid user / Logout user</PageTitle>
-<div style="padding-bottom: 80px"></div>
-<MudButton Style="width: 180px" Href="Account/Login" Color="Color.Primary" Variant="Variant.Filled">Login</MudButton>
+<PageTitle>Account not found · Cleanser</PageTitle>
 
-
-<StatusMessage />
+<AuthShell Title="Account not found">
+    <div class="cx-auth-form">
+        <div>
+            <h2>We could not find your account</h2>
+            <p class="cx-lead" style="margin-top:8px">Your account may have been removed, or you have been signed out. Sign in again to continue.</p>
+        </div>
+        <StatusMessage />
+        <a class="cx-btn cx-btn-primary cx-btn-block" href="Account/Login">Go to sign in <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+    </div>
+</AuthShell>

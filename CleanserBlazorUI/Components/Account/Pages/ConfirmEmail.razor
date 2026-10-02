@@ -8,10 +8,18 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Confirm email</PageTitle>
-<StatusMessage Message="@statusMessage" />
-<MudButton Style="width: 180px" Href="Account/Login" Color="Color.Primary" Variant="Variant.Filled">Login</MudButton>
-  
+<PageTitle>Confirm email · Cleanser</PageTitle>
+
+<AuthShell Title="Confirm email">
+    <div class="cx-auth-form">
+        <div>
+            <h2>Confirm your email</h2>
+        </div>
+        <StatusMessage Message="@statusMessage" />
+        <a class="cx-btn cx-btn-primary cx-btn-block" href="Account/Login">Go to sign in <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+    </div>
+</AuthShell>
+
 @code {
     private string? statusMessage;
 

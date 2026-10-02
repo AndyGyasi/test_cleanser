@@ -85,7 +85,22 @@
             // A brand-new account is signed in but may only see the set-password
             // page (PasswordChangeMiddleware), so it gets no sidebar or app chrome.
             isAuthenticated = authState.User.Identity?.IsAuthenticated == true
-                              && !authState.User.IsInRole(PasswordChangeMiddleware.RoleName);
+                              && !authState.User.IsInRole(PasswordChangeMiddleware.RoleName)
+                              && !IsFullScreenAuthPage();
         }
     }
+
+    // Pages drawn by AuthShell are full-screen and have their own chrome. They stay that way
+    // when the visitor happens to be signed in (e.g. following an emailed link), instead of
+    // being squeezed inside the sidebar layout.
+    private static readonly string[] FullScreenAuthPages =
+    {
+        "account/login", "account/forgotpassword", "account/forgotpasswordconfirmation",
+        "account/resetpassword", "account/resetpasswordconfirmation", "account/lockout",
+        "account/confirmemail", "account/invaliduser", "account/resendemailconfirmation",
+        "account/changetemporarypassword",
+    };
+
+    private bool IsFullScreenAuthPage() =>
+        FullScreenAuthPages.Contains(NavigationManager.ToBaseRelativePath(NavigationManager.Uri).Split('?', '#')[0].Trim('/').ToLowerInvariant());
 }
