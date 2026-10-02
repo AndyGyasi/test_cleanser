@@ -155,13 +155,6 @@
 
         // Nothing is emailed: the admin gives the temporary password to the person directly.
 
-        if (UserManager.Options.SignIn.RequireConfirmedAccount)
-        {
-            RedirectManager.RedirectTo(
-                "Account/RegisterConfirmation",
-                new() { ["email"] = Input.Email, ["returnUrl"] = ReturnUrl });
-        }
-
         RedirectManager.RedirectTo("Manageroles", new() { ["registered"] = Input.Email });
     }
 

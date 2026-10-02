@@ -1,8 +1,7 @@
-﻿@* COMMENTED OUT: the app sends no email, so there is no confirmation link to follow or resend, and nothing
-   links to this page. Uncomment the whole file (remove this comment wrapper) to bring it back. *@
+﻿@* COMMENTED OUT: emails are for sign-in only and the app sends none, so there is no confirmation link to follow.
+   Its web address (the @page line) and every link or address inside were removed on purpose, so this page cannot be
+   reached or linked to. To bring it back, restore the @page line and the addresses, and remove this comment wrapper. *@
 @*
-@page "/Account/ResendEmailConfirmation"
-
 @using System.ComponentModel.DataAnnotations
 @using System.Text
 @using System.Text.Encodings.Web
@@ -41,7 +40,7 @@
             Resend link
             <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
         </button>
-        <p class="cx-auth-note"><a href="Account/Login">Back to sign in</a></p>
+        <p class="cx-auth-note"><a href="[address removed]">Back to sign in</a></p>
     </EditForm>
 </AuthShell>
 
@@ -65,7 +64,7 @@
         var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
         code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
         var callbackUrl = NavigationManager.GetUriWithQueryParameters(
-            NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
+            NavigationManager.ToAbsoluteUri("[address removed]").AbsoluteUri,
             new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
         await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
 

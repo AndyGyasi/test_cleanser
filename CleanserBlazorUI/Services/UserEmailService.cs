@@ -8,14 +8,15 @@ namespace CleanserBlazorUI.Services;
 /// <summary>
 /// An administrator changing the email address someone signs in with. In this app the email IS the
 /// username, so both change together, and the person's other records follow them:
-/// access requests (looked up by the requester's email, so approvals keep working), their open
-/// password-reset request, and their link to the file-ownership record (by ID, so it already survives).
+/// access requests (looked up by the requester's email, so approvals keep working) and their open
+/// password-reset request. Emails are for sign-in only: the link to the file-ownership record
+/// (ReceivedTransUserID, which matches Transact.ReceivedTrans.AssignTo and Ring.Users.ID) is by ID,
+/// so a change here never affects it and nothing is looked up from the new address.
 /// Audit history (who reviewed / attempted / performed something) keeps the address used at the time.
 /// </summary>
 public class UserEmailService(
     UserManager<ApplicationUser> users,
     ApplicationDbContext db,
-    DataManagementService data,
     ILogger<UserEmailService> logger)
 {
     private const string ProtectedAccount = "noreply.XDSmonitor@XDSdatagh.com";
@@ -58,12 +59,6 @@ public class UserEmailService(
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Email, newEmail));
 
         await tx.CommitAsync();
-
-        // A person with no file-ownership link yet may match one under the new address.
-        if (string.IsNullOrWhiteSpace(user.ReceivedTransUserID))
-        {
-            await data.AutoPopulateReceivedTransUserIdAsync(user.Id, newEmail);
-        }
 
         logger.LogInformation("{Admin} changed the email of '{Old}' to '{New}'.", changedBy, oldEmail, newEmail);
         return null;

@@ -148,7 +148,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+// Emails are for sign-in only: the app sends none, so the email-sending setup below is switched off.
+// (The classes stay in the source; uncomment these registrations to use them again.)
+// builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
 builder.Services.AddAuthorization();
 
@@ -178,7 +180,7 @@ builder.Services.AddScoped<PasswordResetRequestService>();
 builder.Services.AddScoped<UserEmailService>();
 builder.Services.AddSingleton<FileCleanupSettingsService>();
 // Add SMTP configuration
-builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
+// builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 
 builder.Services.Configure<IdentityOptions>(options =>
 {
@@ -189,9 +191,9 @@ builder.Services.Configure<IdentityOptions>(options =>
 });
 
 // Add to your services
-builder.Services.AddTransient<ICustomEmailSender, EmailSender>();
-builder.Services.AddTransient<IEmailSender>(sp =>
-    sp.GetRequiredService<ICustomEmailSender>());
+// builder.Services.AddTransient<ICustomEmailSender, EmailSender>();
+// builder.Services.AddTransient<IEmailSender>(sp =>
+//     sp.GetRequiredService<ICustomEmailSender>());
 
 builder.Services.AddHostedService<ScheduledTaskService>();
 builder.Services.AddHostedService<FileCleanupService>();

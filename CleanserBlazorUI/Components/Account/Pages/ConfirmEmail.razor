@@ -1,8 +1,7 @@
-﻿@* COMMENTED OUT: the app sends no email, so there is no confirmation link to follow or resend, and nothing
-   links to this page. Uncomment the whole file (remove this comment wrapper) to bring it back. *@
+﻿@* COMMENTED OUT: emails are for sign-in only and the app sends none, so there is no confirmation link to follow.
+   Its web address (the @page line) and every link or address inside were removed on purpose, so this page cannot be
+   reached or linked to. To bring it back, restore the @page line and the addresses, and remove this comment wrapper. *@
 @*
-@page "/Account/ConfirmEmail"
-
 @using System.Text
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
@@ -19,7 +18,7 @@
             <h2>Confirm your email</h2>
         </div>
         <StatusMessage Message="@statusMessage" />
-        <a class="cx-btn cx-btn-primary cx-btn-block" href="Account/Login">Go to sign in <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+        <a class="cx-btn cx-btn-primary cx-btn-block" href="[address removed]">Go to sign in <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
     </div>
 </AuthShell>
 
