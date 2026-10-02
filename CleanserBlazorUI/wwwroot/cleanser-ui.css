@@ -423,3 +423,7 @@ html .cx-btn-danger:hover { background: var(--danger-bg); }
 .cx-btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 .cx-type-card { align-items: stretch; }
 .cx-clean .cx-card-head { padding: 0; border: 0; }
+.cx-filter { display: flex; gap: 8px; flex-wrap: wrap; }
+.cx-filter-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--input-border); background: transparent; color: var(--sub); font: inherit; font-size: 13px; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+.cx-filter-btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--input-border)); }
+.cx-filter-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-color: var(--accent); color: var(--text); font-weight: 500; }

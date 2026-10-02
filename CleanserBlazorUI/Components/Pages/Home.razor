@@ -190,6 +190,51 @@
         <section class="cx-card cx-empty"><strong>Choose a type of file above to begin.</strong></section>
     }
 
+    <section class="cx-card" id="recent-runs">
+        <div class="cx-card-head">
+            <h2 class="cx-card-title">Recent cleaning runs</h2>
+            <span class="cx-sub">@(runsShowEveryone ? "Everyone's runs" : "Your runs")</span>
+        </div>
+        <div class="cx-filter" role="group" aria-label="Show">
+            @foreach (var f in new[] { "All", "Cleaned with reference check", "Clean only", "Re-cleaned" })
+            {
+                <button type="button" class="cx-filter-btn" aria-pressed="@(runFilter == f ? "true" : "false")" @onclick="() => runFilter = f">
+                    @f <span class="cx-badge">@(f == "All" ? recentRuns.Count : recentRuns.Count(r => r.Kind == f))</span>
+                </button>
+            }
+        </div>
+        <p class="cx-sub">
+            <strong>Cleaned with reference check</strong>: "Clean only" was not ticked.
+            <strong>Clean only</strong>: ticked, file not yet in Transact.ReceivedTrans.
+            <strong>Re-cleaned</strong>: ticked, file already in Transact.ReceivedTrans. Only its owner, an admin, or someone an admin approved can do this.
+        </p>
+        @if (!FilteredRuns.Any())
+        {
+            <div class="cx-empty">No runs to show yet.</div>
+        }
+        else
+        {
+            <div class="cx-table-wrap">
+                <table class="cx-table">
+                    <thead><tr><th>When</th><th>Type</th><th>File</th><th>Subscriber</th><th>By</th><th>Purpose / basis</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in FilteredRuns)
+                        {
+                            <tr>
+                                <td>@r.PerformedDate.ToString("dd MMM yyyy HH:mm")</td>
+                                <td><span class="cx-pill">@r.Kind</span></td>
+                                <td>@r.Filename</td>
+                                <td>@r.DataProvider</td>
+                                <td>@r.PerformedByEmail</td>
+                                <td>@r.Detail</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
     @if (GetErrorsPairsList.Count > 0)
     {
         <section class="cx-card">
@@ -4553,11 +4598,11 @@
         var appUser = await UserManager.GetUserAsync(authState.User);
         var isAdmin = appUser != null && await UserManager.IsInRoleAsync(appUser, "admin");
 
-        if (!CleanOnlyOrCleanAndReference)
-        {
-            currentUserReceivedTransId = appUser?.ReceivedTransUserID;
-            gateMessages = await DataManagementService.GetDataLoggingGateMessagesAsync();
-        }
+        // The owner/admin/approved-access check now applies to ticked runs as well, but only for files that
+        // are already in Transact.ReceivedTrans (a re-clean). Files not in ReceivedTrans can still be cleaned
+        // with the box ticked.
+        currentUserReceivedTransId = appUser?.ReceivedTransUserID;
+        gateMessages = await DataManagementService.GetDataLoggingGateMessagesAsync();
 
         filesPendingAccessRequest.Clear();
         var blockedFileMessages = new List<string>();
@@ -4567,17 +4612,29 @@
         // cleaned this run, before deciding whether to prompt for a
         // cleaning purpose. WillClean mirrors the original per-file gate
         // exactly: true owner, admin, or an approved access request.
-        var decisions = new List<(SpreadsheetFileAndChipColor Item, string Filename, bool WillClean, bool NotLogged, string? AssignedUserId)>();
+        var decisions = new List<(SpreadsheetFileAndChipColor Item, string Filename, bool WillClean, bool NotLogged, string? AssignedUserId, bool InReceivedTrans, string AccessBasis)>();
         foreach (var item in spreadsheetFileAndChipColor)
         {
             var thisFilename = item.SpreadsheetFile?.Name ?? string.Empty;
-            if (!CleanOnlyOrCleanAndReference)
             {
                 var (found, assignedUserId) = await DataManagementService.GetFileAssignmentAsync(thisFilename);
 
+                if (CleanOnlyOrCleanAndReference)
+                {
+                    // Ticked run: a file not in ReceivedTrans is simply cleaned; one that is there needs owner/admin/approval.
+                    if (!found)
+                    {
+                        decisions.Add((item, thisFilename, true, false, null, false, "Not in ReceivedTrans"));
+                        continue;
+                    }
+                    var basis = await DataManagementService.GetReCleanAccessBasisAsync(assignedUserId ?? string.Empty, currentUserReceivedTransId, isAdmin, appUser?.Email, thisFilename);
+                    decisions.Add((item, thisFilename, basis != null, false, assignedUserId, true, basis ?? string.Empty));
+                    continue;
+                }
+
                 if (!found)
                 {
-                    decisions.Add((item, thisFilename, false, true, null));
+                    decisions.Add((item, thisFilename, false, true, null, false, string.Empty));
                     continue;
                 }
 
@@ -4585,11 +4642,7 @@
                 var hasApprovedAccess = !isOwnerMatch && !isAdmin && appUser != null &&
                     await DataManagementService.HasApprovedAccessAsync(thisFilename, appUser.Email!);
 
-                decisions.Add((item, thisFilename, isOwnerMatch || isAdmin || hasApprovedAccess, false, assignedUserId));
-            }
-            else
-            {
-                decisions.Add((item, thisFilename, true, false, null));
+                decisions.Add((item, thisFilename, isOwnerMatch || isAdmin || hasApprovedAccess, false, assignedUserId, true, string.Empty));
             }
         }
 
@@ -4619,7 +4672,36 @@
 
         foreach (var decision in decisions)
         {
-            if (!CleanOnlyOrCleanAndReference)
+            if (CleanOnlyOrCleanAndReference)
+            {
+                if (!decision.WillClean)
+                {
+                    var assignedName = !string.IsNullOrWhiteSpace(decision.AssignedUserId)
+                        ? await DataManagementService.GetAssociateEmailForReceivedTransUserIdAsync(decision.AssignedUserId) ?? decision.AssignedUserId
+                        : "an unassigned user";
+                    blockedFileMessages.Add(gateMessages!.AssignedToOtherMessageTemplate
+                        .Replace("{filename}", decision.Filename)
+                        .Replace("{assignedName}", assignedName));
+
+                    var (dataProvider, subCode, subXDSCode, subCategoryCode) = await DataManagementService.GetDataProviderInfoForFilenameAsync(decision.Filename);
+                    filesPendingAccessRequest.Add(new PendingAccessRequestFile
+                    {
+                        Filename = decision.Filename,
+                        DataProvider = dataProvider,
+                        SubCode = subCode,
+                        SubXDSCode = subXDSCode,
+                        SubCategoryCode = subCategoryCode,
+                        AssignedToEmail = assignedName
+                    });
+                    continue;
+                }
+
+                string? assignedToEmail = decision.InReceivedTrans && !string.IsNullOrWhiteSpace(decision.AssignedUserId)
+                    ? await DataManagementService.GetAssociateEmailForReceivedTransUserIdAsync(decision.AssignedUserId) ?? decision.AssignedUserId
+                    : null;
+                await DataManagementService.RecordCleanOnlyRunAsync(decision.Filename, appUser?.Email ?? "unknown", decision.InReceivedTrans, assignedToEmail, decision.AccessBasis);
+            }
+            else
             {
                 if (decision.NotLogged)
                 {
@@ -4674,7 +4756,21 @@
         {
             accessRequestReasons = await DataManagementService.GetAccessRequestReasonsAsync();
         }
+        await LoadRecentRunsAsync();
     }
+
+    // ---- Recent cleaning runs (dashboard list) ----
+    List<CleaningRunRow> recentRuns = new();
+    string runFilter = "All";
+    bool runsShowEveryone;
+    async Task LoadRecentRunsAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var email = authState.User.Identity?.Name;
+        runsShowEveryone = authState.User.IsInRole("admin");
+        recentRuns = await DataManagementService.GetRecentCleaningRunsAsync(runsShowEveryone ? null : email);
+    }
+    IEnumerable<CleaningRunRow> FilteredRuns => runFilter == "All" ? recentRuns : recentRuns.Where(r => r.Kind == runFilter);
 
     async Task SubmitAccessRequestAsync()
     {
@@ -9825,6 +9921,7 @@
         referenceView = "d-none";
         CleanOnlyOrCleanAndReference = false;
 
+        await LoadRecentRunsAsync();
         allowedFileNames = await DataManagementService.GetSubscriberUserInfosShotCode();
         shortForms = await DataManagementService.BUS_NUM_InitializeSettingsDBAsyncNormalizer_Home();
         settingDataSettings = await DataManagementService.InitializeSettingsDBAsync();

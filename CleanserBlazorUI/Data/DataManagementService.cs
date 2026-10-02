@@ -1705,6 +1705,61 @@ public class DataManagementService
         await _context.SaveChangesAsync();
     }
 
+    // Who may clean a file that is already in Transact.ReceivedTrans, with "Clean only" ticked:
+    // its owner, an admin, or someone with admin-approved access. Returns the basis, or null when none applies.
+    public async Task<string?> GetReCleanAccessBasisAsync(string assignedUserId, string? currentUserReceivedTransId, bool isAdmin, string? email, string filename)
+    {
+        if (string.Equals(assignedUserId, currentUserReceivedTransId, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(currentUserReceivedTransId)) return "Owner";
+        if (isAdmin) return "Admin";
+        if (!string.IsNullOrWhiteSpace(email) && await HasApprovedAccessAsync(filename, email)) return "Approved access";
+        return null;
+    }
+
+    // Records one file cleaned with "Clean only" ticked. Purely for admin visibility.
+    public async Task RecordCleanOnlyRunAsync(string filename, string performedByEmail, bool fileInReceivedTrans, string? assignedToEmail, string accessBasis)
+    {
+        var (dataProvider, subCode, subXDSCode, subCategoryCode) = await GetDataProviderInfoForFilenameAsync(filename);
+
+        _context.DataLoggingCleanOnlyLogs.Add(new DataLoggingCleanOnlyLog
+        {
+            Filename = filename,
+            DataProvider = dataProvider,
+            SubCode = subCode,
+            SubXDSCode = subXDSCode,
+            SubCategoryCode = subCategoryCode,
+            PerformedByEmail = performedByEmail,
+            PerformedDate = DateTime.Now,
+            FileInReceivedTrans = fileInReceivedTrans,
+            AssignedToEmail = assignedToEmail,
+            AccessBasis = accessBasis
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    // The dashboard's "Recent cleaning runs": the two logs side by side, newest first. Pass an email to see
+    // only that person's runs (non-admins), or null for everyone's (admins).
+    public async Task<List<CleaningRunRow>> GetRecentCleaningRunsAsync(string? onlyEmail, int take = 100)
+    {
+        var withRef = _context.DataLoggingCleaningPurposeLogs.AsNoTracking().AsQueryable();
+        var cleanOnly = _context.DataLoggingCleanOnlyLogs.AsNoTracking().AsQueryable();
+        if (onlyEmail != null)
+        {
+            withRef = withRef.Where(l => l.PerformedByEmail == onlyEmail);
+            cleanOnly = cleanOnly.Where(l => l.PerformedByEmail == onlyEmail);
+        }
+
+        var a = (await withRef.OrderByDescending(l => l.PerformedDate).Take(take).ToListAsync())
+            .Select(l => new CleaningRunRow { Kind = "Cleaned with reference check", Filename = l.Filename, DataProvider = l.DataProvider, PerformedByEmail = l.PerformedByEmail, PerformedDate = l.PerformedDate, Detail = l.Purpose });
+        var b = (await cleanOnly.OrderByDescending(l => l.PerformedDate).Take(take).ToListAsync())
+            .Select(l => new CleaningRunRow
+            {
+                Kind = l.FileInReceivedTrans ? "Re-cleaned" : "Clean only",
+                Filename = l.Filename, DataProvider = l.DataProvider, PerformedByEmail = l.PerformedByEmail, PerformedDate = l.PerformedDate,
+                Detail = l.FileInReceivedTrans ? l.AccessBasis : "Not in ReceivedTrans"
+            });
+        return a.Concat(b).OrderByDescending(r => r.PerformedDate).Take(take).ToList();
+    }
+
     public async Task<List<DataLoggingCleaningPurposeLog>> GetCleaningPurposeLogAsync()
     {
         return await _context.DataLoggingCleaningPurposeLogs

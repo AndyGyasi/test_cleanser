@@ -190,3 +190,37 @@ public class DataLoggingCleaningPurposeLog
     public string Purpose { get; set; } = string.Empty;
     public DateTime PerformedDate { get; set; }
 }
+
+/// <summary>
+/// One row per file cleaned with "Clean only" ticked (no reference check). Written when the file
+/// is actually cleaned, never for a skipped file. FileInReceivedTrans is true when the file already
+/// exists in Transact.ReceivedTrans, which makes the run a re-clean: only the file's owner, an admin,
+/// or someone with admin-approved access may do that. AccessBasis says which of those applied.
+/// </summary>
+public class DataLoggingCleanOnlyLog
+{
+    public int Id { get; set; }
+    public string Filename { get; set; } = string.Empty;
+    public string DataProvider { get; set; } = string.Empty;
+    public string? SubCode { get; set; }
+    public string? SubXDSCode { get; set; }
+    public string? SubCategoryCode { get; set; }
+    public string PerformedByEmail { get; set; } = string.Empty;
+    public DateTime PerformedDate { get; set; }
+    public bool FileInReceivedTrans { get; set; }
+    public string? AssignedToEmail { get; set; }
+    // "Not in ReceivedTrans", "Owner", "Admin" or "Approved access"
+    public string AccessBasis { get; set; } = string.Empty;
+}
+
+/// <summary>One line of the dashboard's "Recent cleaning runs" list.</summary>
+public class CleaningRunRow
+{
+    // "Clean only", "Cleaned with reference check" or "Re-cleaned"
+    public string Kind { get; set; } = string.Empty;
+    public string Filename { get; set; } = string.Empty;
+    public string DataProvider { get; set; } = string.Empty;
+    public string PerformedByEmail { get; set; } = string.Empty;
+    public DateTime PerformedDate { get; set; }
+    public string Detail { get; set; } = string.Empty;
+}

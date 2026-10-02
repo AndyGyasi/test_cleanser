@@ -20,6 +20,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<DataLoggingAccessRequest> DataLoggingAccessRequests { get; set; }
     public DbSet<DataLoggingCleaningPurposeReason> DataLoggingCleaningPurposeReasons { get; set; }
     public DbSet<DataLoggingCleaningPurposeLog> DataLoggingCleaningPurposeLogs { get; set; }
+    public DbSet<DataLoggingCleanOnlyLog> DataLoggingCleanOnlyLogs { get; set; }
     public DbSet<NavSection> NavSections { get; set; }
     public DbSet<NavItem> NavItems { get; set; }
     public DbSet<SessionSettings> SessionSettings { get; set; }
