@@ -8,6 +8,7 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject PasswordResetRequestService Requests
+@inject UserEmailService EmailChanger
 @attribute [Authorize(Roles = "admin")]
 
 <PageTitle>Manage users · Cleanser</PageTitle>
@@ -99,16 +100,25 @@ else if (!string.IsNullOrWhiteSpace(Registered))
 
 @if (editing is not null)
 {
-    <EditForm Model="Input" OnValidSubmit="UpdateRoleAsync" class="cx-card" style="max-width:560px;margin-bottom:18px">
+    <EditForm Model="Input" OnValidSubmit="UpdateUserAsync" class="cx-card" style="max-width:560px;margin-bottom:18px">
         <DataAnnotationsValidator />
-        <h2>Edit role</h2>
+        <h2>Edit user</h2>
 
         <div class="cx-field">
-            <label for="edit-email">User</label>
+            <label for="edit-email">Email address</label>
             <span class="cx-control">
                 <svg class="cx-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 7l9 6 9-6" /></svg>
-                <input id="edit-email" type="text" value="@Input.Email" disabled />
+                <InputText id="edit-email" @bind-Value="Input.Email" type="email" autocomplete="off" disabled="@editing.IsMe" />
             </span>
+            @if (editing.IsMe)
+            {
+                <span class="cx-hint">You cannot change your own email here. Ask another administrator.</span>
+            }
+            else
+            {
+                <span class="cx-hint">This is what they sign in with. Their access and history stay with them, and they are signed out within a minute.</span>
+            }
+            <ValidationMessage For="() => Input.Email" class="cx-error" />
         </div>
 
         <div class="cx-field">
@@ -127,7 +137,7 @@ else if (!string.IsNullOrWhiteSpace(Registered))
         </div>
 
         <div class="cx-actions">
-            <button type="submit" class="cx-btn cx-btn-primary">Update role</button>
+            <button type="submit" class="cx-btn cx-btn-primary">Save changes</button>
             <button type="button" class="cx-btn cx-btn-ghost" @onclick="CancelEdit">Cancel</button>
         </div>
     </EditForm>
@@ -200,7 +210,7 @@ else if (!string.IsNullOrWhiteSpace(Registered))
                                 }
                             </td>
                             <td class="cx-row-actions">
-                                <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@row.IsProtected" @onclick="() => StartEdit(row)">Edit role</button>
+                                <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled="@row.IsProtected" @onclick="() => StartEdit(row)">Edit</button>
                                 <button type="button" class="cx-btn @(row.RequestedUtc is not null ? "cx-btn-primary" : "cx-btn-ghost") cx-btn-sm" disabled="@(row.IsProtected || row.IsMe)" title="@(row.IsMe ? "Change your own password under My account" : null)" @onclick="() => StartReset(row)">Reset password</button>
                                 <button type="button" class="cx-btn cx-btn-danger cx-btn-sm" disabled="@row.IsProtected" @onclick="() => DeleteAsync(row)">Delete</button>
                             </td>
@@ -370,11 +380,11 @@ else if (!string.IsNullOrWhiteSpace(Registered))
         await LoadAsync();
     }
 
-    private async Task UpdateRoleAsync()
+    private async Task UpdateUserAsync()
     {
-        if (string.Equals(Input.Email, ProtectedAccount, StringComparison.OrdinalIgnoreCase)) return;
+        if (editing is null || editing.IsProtected) return;
 
-        var user = await UserManager.FindByEmailAsync(Input.Email);
+        var user = await UserManager.FindByIdAsync(editing.Id);
         if (user is null)
         {
             Say("That user no longer exists.", error: true);
@@ -383,20 +393,39 @@ else if (!string.IsNullOrWhiteSpace(Registered))
             return;
         }
 
-        // Replace the person's role, but never lift a pending "must set a password" flag:
-        // that is only lifted by the person choosing their own password.
-        var current = await UserManager.GetRolesAsync(user);
-        var remove = await UserManager.RemoveFromRolesAsync(user, current.Where(r => !IsMustChange(r)).ToList());
-        var add = remove.Succeeded ? await UserManager.AddToRoleAsync(user, Input.NewUserRoles) : remove;
-        if (!add.Succeeded)
+        var changes = new List<string>();
+
+        // Email first: it can be refused (already used, not valid), and then nothing else changes.
+        var newEmail = Input.Email.Trim();
+        if (!editing.IsMe && !string.Equals(newEmail, editing.Email, StringComparison.Ordinal))
         {
-            Say($"Could not change the role: {string.Join(" ", add.Errors.Select(e => e.Description))}", error: true);
-        }
-        else
-        {
-            Say($"{Input.Email} is now {RoleLabels.For(Input.NewUserRoles)}.");
+            var problem = await EmailChanger.ChangeAsync(user, newEmail, myEmail);
+            if (problem is not null)
+            {
+                Say(problem, error: true);   // keep the panel open so it can be corrected
+                return;
+            }
+            changes.Add($"email is now {newEmail}");
         }
 
+        // Replace the person's role, but never lift a pending "must set a password" flag:
+        // that is only lifted by the person choosing their own password.
+        if (!string.Equals(Input.NewUserRoles, editing.Roles.FirstOrDefault(), StringComparison.OrdinalIgnoreCase))
+        {
+            var current = await UserManager.GetRolesAsync(user);
+            var remove = await UserManager.RemoveFromRolesAsync(user, current.Where(r => !IsMustChange(r)).ToList());
+            var add = remove.Succeeded ? await UserManager.AddToRoleAsync(user, Input.NewUserRoles) : remove;
+            if (!add.Succeeded)
+            {
+                Say($"{(changes.Count > 0 ? "The email was changed, but " : "")}the role could not be changed: {string.Join(" ", add.Errors.Select(e => e.Description))}", error: true);
+                editing = null;
+                await LoadAsync();
+                return;
+            }
+            changes.Add($"role is now {RoleLabels.For(Input.NewUserRoles)}");
+        }
+
+        Say(changes.Count == 0 ? "Nothing was changed." : $"{newEmail}: {string.Join(" and ", changes)}.");
         editing = null;
         await LoadAsync();
     }
@@ -458,6 +487,8 @@ else if (!string.IsNullOrWhiteSpace(Registered))
 
     private sealed class InputModel
     {
+        [Required(ErrorMessage = "Enter an email address.")]
+        [EmailAddress(ErrorMessage = "Enter a valid email address.")]
         public string Email { get; set; } = "";
 
         [Required(ErrorMessage = "Choose a role.")]

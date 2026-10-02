@@ -8,14 +8,14 @@ using System.Security.Claims;
 namespace CleanserBlazorUI.Components.Account
 {
     // This is a server-side AuthenticationStateProvider that revalidates the security stamp for the connected user
-    // every 30 minutes an interactive circuit is connected.
+    // every minute an interactive circuit is connected (so an admin resetting a password or changing an email takes effect quickly).
     internal sealed class IdentityRevalidatingAuthenticationStateProvider(
             ILoggerFactory loggerFactory,
             IServiceScopeFactory scopeFactory,
             IOptions<IdentityOptions> options)
         : RevalidatingServerAuthenticationStateProvider(loggerFactory)
     {
-        protected override TimeSpan RevalidationInterval => TimeSpan.FromMinutes(30);
+        protected override TimeSpan RevalidationInterval => TimeSpan.FromMinutes(1);
 
         protected override async Task<bool> ValidateAuthenticationStateAsync(
             AuthenticationState authenticationState, CancellationToken cancellationToken)

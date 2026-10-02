@@ -79,6 +79,10 @@ builder.Services.AddAuthentication(options =>
     .AddIdentityCookies();
 
 builder.Services.AddSingleton<SessionSettingsService>();
+
+// How soon a changed security stamp (password reset, email change by an admin) ends someone's
+// existing sessions. The default is 30 minutes; a minute is far safer for confidential data.
+builder.Services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.FromMinutes(1));
 builder.Services.AddSingleton<SessionActivityRegistry>();
 builder.Services.AddScoped<JobTracker>();
 builder.Services.ConfigureApplicationCookie(options =>
@@ -171,6 +175,7 @@ builder.Services.AddScoped<ExcelProcessorService>();
 builder.Services.AddScoped<DataManagementService>();
 builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<PasswordResetRequestService>();
+builder.Services.AddScoped<UserEmailService>();
 builder.Services.AddSingleton<FileCleanupSettingsService>();
 // Add SMTP configuration
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
