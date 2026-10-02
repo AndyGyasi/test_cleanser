@@ -3,6 +3,7 @@
 @inject DataManagementService DataManagementService
 
 @attribute [Authorize(Roles = "admin")]
+@inject CleanserBlazorUI.Services.JobTracker JobTracker
 
 <MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
 
@@ -101,6 +102,7 @@
 
     async Task OnFileSelected(InputFileChangeEventArgs e)
     {
+        await using var job = await JobTracker.BeginAsync(); // keeps the session alive while this runs
         var browserFile = e.File;
         if (browserFile == null) return;
 

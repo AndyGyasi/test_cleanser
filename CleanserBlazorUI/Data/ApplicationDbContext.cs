@@ -33,6 +33,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     {
         base.OnModelCreating(builder);
 
+        // Retired true/false flag (see ApplicationUser). The column is NOT NULL with no
+        // default, so EF must keep writing it or creating a user would fail; as a shadow
+        // property it stays in the model (no migration) but no code can read it.
+        builder.Entity<ApplicationUser>().Property<bool>("MustChangePassword");
+
         // Required for UnloadableLogHeader.SubscriberProfileId to be a safe FK --
         // SaveSubscriberProfileAsync already treats SubscriberCode as unique via an
         // app-level lookup, but nothing enforced that at the DB level until now.

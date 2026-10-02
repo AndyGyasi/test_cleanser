@@ -80,6 +80,8 @@ builder.Services.AddAuthentication(options =>
     .AddIdentityCookies();
 
 builder.Services.AddSingleton<SessionSettingsService>();
+builder.Services.AddSingleton<SessionActivityRegistry>();
+builder.Services.AddScoped<JobTracker>();
 builder.Services.ConfigureApplicationCookie(options =>
 {
     // The real session limit is the admin-set idle timeout (SessionIdle); the
@@ -102,11 +104,11 @@ builder.Services.ConfigureApplicationCookie(options =>
         return identitySigningIn(context);
     };
 
-    // The keep-alive ping is called by script: answer 401 instead of redirecting to the login page.
+    // The keep-alive ping and idle probe are called by script: answer 401 instead of redirecting to the login page.
     var redirectToLogin = options.Events.OnRedirectToLogin;
     options.Events.OnRedirectToLogin = context =>
     {
-        if (context.Request.Path.StartsWithSegments("/session/keepalive"))
+        if (context.Request.Path.StartsWithSegments("/session/keepalive") || context.Request.Path.StartsWithSegments("/session/check"))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return Task.CompletedTask;
@@ -145,21 +147,26 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("PasswordChanged", policy =>
-        policy.RequireAssertion(async context =>
-        {
-            var userManager = context.Resource as UserManager<ApplicationUser>;
-            if (userManager == null) return false;
+builder.Services.AddAuthorization();
 
-            var userEmail = context.User?.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-            if (userEmail == null) return false;
-
-            var user = await userManager.FindByEmailAsync(userEmail);
-            return user?.MustChangePassword ?? false;
-        }));
-});
+// RETIRED -- the "PasswordChanged" policy read the old MustChangePassword true/false
+// flag, which nothing ever set, and no page used the policy. First-login enforcement is
+// now PasswordChangeMiddleware (the "MustChangePassword" role).
+// builder.Services.AddAuthorization(options =>
+// {
+//     options.AddPolicy("PasswordChanged", policy =>
+//         policy.RequireAssertion(async context =>
+//         {
+//             var userManager = context.Resource as UserManager<ApplicationUser>;
+//             if (userManager == null) return false;
+//
+//             var userEmail = context.User?.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+//             if (userEmail == null) return false;
+//
+//             var user = await userManager.FindByEmailAsync(userEmail);
+//             return user?.MustChangePassword ?? false;
+//         }));
+// });
 
 builder.Services.AddScoped<ExcelProcessorService>();
 builder.Services.AddScoped<DataManagementService>();
@@ -262,6 +269,13 @@ app.MapAdditionalIdentityEndpoints();
 // Called by _session.js while the user is active; the request itself is what
 // refreshes the idle timer (see SessionIdle). 401 = the session has ended.
 app.MapPost("/session/keepalive", (HttpContext context) =>
+        context.User.Identity?.IsAuthenticated == true ? Results.NoContent() : Results.StatusCode(StatusCodes.Status401Unauthorized))
+    .DisableAntiforgery();
+
+// _session.js asks this once its own idle window has passed. 204 = the server still
+// counts the session as active (e.g. a job is running), 401 = it has ended. The cookie
+// check treats this path as a pure probe, so asking never extends the session.
+app.MapPost("/session/check", (HttpContext context) =>
         context.User.Identity?.IsAuthenticated == true ? Results.NoContent() : Results.StatusCode(StatusCodes.Status401Unauthorized))
     .DisableAntiforgery();
 

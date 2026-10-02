@@ -14,6 +14,7 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<Home> Logger
 @inject IDialogService DialogService
+@inject CleanserBlazorUI.Services.JobTracker JobTracker
 
 
 @attribute [Authorize]
@@ -430,6 +431,7 @@
 
     async Task REF_StartReferencing(int id)
     {
+        await using var job = await JobTracker.BeginAsync(); // keeps the session alive while this runs
         StartTimer();
         passedRecord.Clear();
         failedRecord.Clear();
@@ -471,6 +473,7 @@
 
     async Task REF_InsertThisAsLatesReference()
     {
+        await using var job = await JobTracker.BeginAsync(); // keeps the session alive while this runs
         StartTimer();
         passedRecord.Clear();
         failedRecord.Clear();
@@ -496,6 +499,7 @@
     // alerts) is identical for either type.
     async Task GenerateUnloadableLogClicked()
     {
+        await using var job = await JobTracker.BeginAsync(); // keeps the session alive while this runs
         bool isBusiness = _lastUnlDataType == "BUS";
         int unlCount = isBusiness ? (_lastUnlBatchBus?.Count ?? 0) : (_lastUnlBatchInd?.Count ?? 0);
 
@@ -921,6 +925,7 @@
     }
     async Task REF_FileUpload(InputFileChangeEventArgs e)
     {
+        await using var job = await JobTracker.BeginAsync(); // keeps the session alive while this runs
         Logger.LogInformation("File upload started with {FileCount} files.", e.GetMultipleFiles(MAX_FILES).Count);
         REF_ResetVariables();
         isLoading = true;
@@ -4601,6 +4606,7 @@
     }
     async Task RunCleanser(int id)
     {
+        await using var job = await JobTracker.BeginAsync(); // keeps the session alive while this runs
         correctDateOfBirth = dobIssues = matchdata = newdata = duplicateCount = "0";
         writeCounting = 0;
         readCounting = 0;

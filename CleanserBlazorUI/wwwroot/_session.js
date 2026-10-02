@@ -1,4 +1,4 @@
-// Idle-session handling for signed-in pages. The server is the authority: it ends
+// Idle-session handling for signed-in pages (a running job also keeps the session alive; see JobTracker). The server is the authority: it ends
 // a session when no request arrives within the admin-set window (SessionIdle).
 // This script adds the two things the server cannot see on its own:
 //  1. Real user activity -- on an interactive page, clicks and typing travel over the
@@ -51,8 +51,23 @@
         window.addEventListener(name, onActivity, { passive: true, capture: true });
     });
 
+    // Once this page has seen no activity for the whole window, ask the server before
+    // ending anything: it also knows about running jobs (cleaning, referencing...), which
+    // keep a session alive without any mouse or keyboard activity. 401 = really over.
+    let checking = false;
+    async function confirmIdle() {
+        if (checking) return;
+        checking = true;
+        try {
+            const r = await fetch("/session/check", { method: "POST", credentials: "same-origin" });
+            if (r.status === 401) end();
+            else last = Date.now() - idleMs + 60000; // still active on the server: look again in a minute
+        } catch (e) { /* offline: try again on the next tick */ }
+        finally { checking = false; }
+    }
+
     setInterval(function () {
-        if (Date.now() - Math.max(last, sharedLast()) >= idleMs) end();
+        if (Date.now() - Math.max(last, sharedLast()) >= idleMs) confirmIdle();
     }, 15000);
 
     onActivity();
