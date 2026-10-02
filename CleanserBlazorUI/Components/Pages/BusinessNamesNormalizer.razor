@@ -5,66 +5,64 @@
 
 
 @attribute [Authorize(Roles = "admin")]
+<div class="cx-page cx-clean">
+    <header class="cx-page-head">
+        <div>
+            <span class="cx-crumb">Data cleaning</span>
+            <h1>Business name mapping</h1>
+            <p>Replace a short or abbreviated business name with its full name when files are cleaned.</p>
+        </div>
+    </header>
+
 <MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
 
+    <section class="cx-card">
+        <div class="cx-card-head"><h2 class="cx-card-title">Add a mapping</h2></div>
+        <div class="cx-actions">
+            <label class="cx-field cx-grow">Replace this<input class="cx-input" @bind="short_value" @bind:event="oninput" /></label>
+            <label class="cx-field cx-grow">With this<input class="cx-input" @bind="long_value" @bind:event="oninput" /></label>
+            <button type="button" class="cx-btn cx-btn-primary cx-align-end" @onclick="AddBusinessNamesValue">Save changes</button>
+        </div>
+    </section>
 
+    <section class="cx-card">
+        <div class="cx-card-head">
+            <h2 class="cx-card-title">Saved mappings</h2>
+            <span class="cx-badge">@BusinessNamesSettings.Count</span>
+        </div>
+        @if (BusinessNamesSettings.Count == 0)
+        {
+            <div class="cx-empty">No mappings saved yet.</div>
+        }
+        else
+        {
+            <div class="cx-table-wrap">
+                <table class="cx-table">
+                    <thead>
+                        <tr><th>Short name</th><th>Full name</th><th>Date created</th><th>Last modified</th><th class="cx-col-actions">Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var bs in BusinessNamesSettings)
+                        {
+                            <tr>
+                                <td>@bs.ShortValue</td>
+                                <td>@bs.LongValue</td>
+                                <td>@bs.DateCreated</td>
+                                <td>@bs.DateModified</td>
+                                <td class="cx-col-actions">
+                                    @* Edit has never been wired up on this page; kept visible but switched off. *@
+                                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" disabled title="Editing is not available yet">Edit</button>
+                                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm cx-btn-danger" @onclick="@(() => DeleteBusinessNamesValue(bs))">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
 
-<MudGrid style="min-width: 100%;">
-    <MudItem>
-        <MudTextField Margin="Margin.Normal" Style="background-color: transparent; width: 430px; " @bind-Value="short_value" Label="Replace this" Variant="Variant.Outlined"></MudTextField>
-    </MudItem>
-    <MudItem>
-        <MudTextField Margin="Margin.Normal" Style="background-color: transparent; width: 430px;" @bind-Value="long_value" Label="With this" Variant="Variant.Outlined"></MudTextField>
-    </MudItem>
-    <MudItem>
-        <MudButton OnClick="AddBusinessNamesValue" Variant="Variant.Filled" Style="width: 150px; height: 58px; margin-top: 15px">
-            Save Changes
-        </MudButton>
-    </MudItem>
-</MudGrid>
-<br />
-
-<MudGrid style="min-width: 100%;">
-    <MudItem>
-        <MudButton Style="width: 230px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Color="Color.Primary" Icon="@Icons.Material.Filled.Delete">Short name of a business</MudButton>
-        <MudButton Style="width: 230px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Color="Color.Primary" Icon="@Icons.Material.Filled.Delete">Fullname of a business</MudButton>
-        <MudButton Style="width: 230px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Color="Color.Primary" Icon="@Icons.Material.Filled.Delete">Date Created</MudButton>
-        <MudButton Style="width: 230px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Color="Color.Primary" Icon="@Icons.Material.Filled.Delete">Last Date Modified</MudButton>
-        <MudButton Style="width: 155px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Color="Color.Primary" Icon="@Icons.Material.Filled.Delete">Select Action</MudButton>
-    </MudItem>
-</MudGrid>
-
-
-@foreach (var bs in BusinessNamesSettings)
-{
-    <MudGrid style="min-width: 100%;">
-        <MudItem Style="align-items: start; justify-items: start; align-content: start; justify-content: start;">
-
-            <MudButton Style="width: 230px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Variant="Variant.Text">@bs.ShortValue</MudButton>
-            <MudButton Style="width: 230px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Variant="Variant.Text">@bs.LongValue</MudButton>
-            <MudButton Style="width: 230px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Variant="Variant.Text">@bs.DateCreated</MudButton>
-            <MudButton Style="width: 230px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Variant="Variant.Text">@bs.DateModified</MudButton>
-            <MudButton Style="width: 75px; align-items: start; justify-items: start; align-content: start; justify-content: start;" OnClick="@(() => DeleteBusinessNamesValue(bs))" Color="Color.Error" Icon="@Icons.Material.Filled.Edit">DELETE</MudButton>
-            <MudButton Style="width: 75px; align-items: start; justify-items: start; align-content: start; justify-content: start;" Color="Color.Success" Icon="@Icons.Material.Filled.Delete">EDIT</MudButton>
-        </MudItem>
-    </MudGrid>
-}
-<div class="py-10"></div>
-
-
-
-
-<MudAppBar Bottom="true" Fixed="true" Dense="@true" Elevation="25" Style="@($"color:{Colors.LightGreen.Accent3}; background:{Colors.BlueGray.Darken4}; width: 100%;")">
-    <MudSpacer></MudSpacer>
-    <MudPaper Elevation="24" style="background-color: transparent">
-        <p style="background-color: transparent">
-            © @DateTime.Now.Year.ToString() <strong>XDS DATA</strong>. All rights reserved.
-            <a href="/privacy-policy" style="color: #007bff; text-decoration: none;">Privacy Policy</a> |
-            <a href="/terms-of-service" style="color: #007bff; text-decoration: none;">Terms of Service</a> |
-            <a href="/cookie-policy" style="color: #007bff; text-decoration: none;">Cookie Policy</a>
-        </p>
-    </MudPaper>
-</MudAppBar>
 @code {
     private CancellationTokenSource cancellationTokenSource;
     private MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;

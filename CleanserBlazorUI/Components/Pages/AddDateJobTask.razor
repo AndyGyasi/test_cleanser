@@ -7,20 +7,28 @@
 
 
 <AuthorizeView Roles="admin">
-    <MudNumericField T="int" Label="Start Hour (0-23)" @bind-Value="StartHour" Min="0" Max="23" />
-    <MudNumericField T="int" Label="End Hour (1-24)" @bind-Value="EndHour" Min="1" Max="24" />
-    <h1></h1>
-    <MudButton Disabled="@_processing" OnClick="OpenCleanupSettingsDialog" Variant="Variant.Filled" Color="Color.Primary" Style="width: 250px">
-        @if (_processing)
-        {
-            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-            <MudText Class="ms-2">Saving</MudText>
-        }
-        else
-        {
-            <MudText>Save Changes</MudText>
-        }
-    </MudButton>
+    <div class="cx-page cx-clean">
+        <header class="cx-page-head">
+            <div>
+                <span class="cx-crumb">Data cleaning</span>
+                <h1>Schedule automatic cleanup</h1>
+                <p>Choose the hours of the day when old uploaded files are cleared away automatically.</p>
+            </div>
+        </header>
+
+        <section class="cx-card">
+            <div class="cx-card-head"><h2 class="cx-card-title">Cleanup hours</h2></div>
+            <div class="cx-form-grid">
+                <label class="cx-field">Start hour (0-23)<input class="cx-input" type="number" min="0" max="23" @bind="StartHour" /></label>
+                <label class="cx-field">End hour (1-24)<input class="cx-input" type="number" min="1" max="24" @bind="EndHour" /></label>
+            </div>
+            <div class="cx-actions">
+                <button type="button" class="cx-btn cx-btn-primary" disabled="@_processing" aria-busy="@(_processing ? "true" : "false")" @onclick="OpenCleanupSettingsDialog">
+                    @(_processing ? "Saving" : "Save changes")
+                </button>
+            </div>
+        </section>
+    </div>
 </AuthorizeView>
 @code {
     public int StartHour { get; set; }

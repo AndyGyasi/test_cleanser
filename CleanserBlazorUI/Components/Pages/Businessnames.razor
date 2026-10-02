@@ -5,45 +5,57 @@
 
 
 @attribute [Authorize(Roles = "admin")]
+<div class="cx-page cx-clean">
+    <header class="cx-page-head">
+        <div>
+            <span class="cx-crumb">Data cleaning</span>
+            <h1>Business names</h1>
+            <p>Names in this list are treated as business names when files are cleaned.</p>
+        </div>
+    </header>
+
 <MudAlert Class="@AlertSeverityVisible" Severity="@AlertSeverity">@AlertSeverityMessage</MudAlert>
 
+    <section class="cx-card">
+        <div class="cx-card-head"><h2 class="cx-card-title">Add a business name</h2></div>
+        <div class="cx-actions">
+            <label class="cx-field cx-grow">Business name<input class="cx-input" @bind="text_value" @bind:event="oninput" placeholder="Enter business name here" /></label>
+            <button type="button" class="cx-btn cx-btn-primary cx-align-end" @onclick="AddBusinessNamesValue">Add</button>
+        </div>
+    </section>
 
-<MudGrid Style="min-width: 100%">
-    <MudItem lg="11">
-        <MudTextField Style="background-color: transparent;" @bind-Value="text_value" Label="Enter business name here" Variant="Variant.Outlined"></MudTextField>
-    </MudItem>
-    <MudItem lg="1" Style="align-content:center">
-        <MudButton OnClick="AddBusinessNamesValue" Class="py-3" FullWidth="true" Variant="Variant.Outlined">Add</MudButton>
-    </MudItem>
-</MudGrid>
-<br />
+    <section class="cx-card">
+        <div class="cx-card-head">
+            <h2 class="cx-card-title">Saved business names</h2>
+            <span class="cx-badge">@BusinessNamesSettings.Count</span>
+        </div>
+        @if (BusinessNamesSettings.Count == 0)
+        {
+            <div class="cx-empty">No business names saved yet.</div>
+        }
+        else
+        {
+            <div class="cx-table-wrap">
+                <table class="cx-table">
+                    <thead><tr><th>Business name</th><th class="cx-col-actions">Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var bs in BusinessNamesSettings)
+                        {
+                            <tr>
+                                <td>@bs.Value</td>
+                                <td class="cx-col-actions">
+                                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" @onclick="@(() => EditBusinessNamesValue(bs))">Edit</button>
+                                    <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm cx-btn-danger" @onclick="@(() => DeleteBusinessNamesValue(bs))">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
 
-@foreach (var bs in BusinessNamesSettings)
-{
-    <MudGrid Style="min-width: 100%">
-        <MudItem lg="11">
-            <MudButton OnClick="@(() => DeleteBusinessNamesValue(bs))" Color="Color.Error" Icon="@Icons.Material.Filled.Edit">DELETE</MudButton>
-            <MudButton OnClick="@(() => EditBusinessNamesValue(bs))" Color="Color.Success" Icon="@Icons.Material.Filled.Delete">EDIT</MudButton>
-            <MudButton Variant="Variant.Text">@bs.Value</MudButton>
-        </MudItem>
-    </MudGrid>
-}
-<div class="py-10"></div>
-
-
-
-
-<MudAppBar Bottom="true" Fixed="true" Dense="@true" Elevation="25" Style="@($"color:{Colors.LightGreen.Accent3}; background:{Colors.BlueGray.Darken4}; width: 100%;")">
-    <MudSpacer></MudSpacer>
-    <MudPaper Elevation="24" style="background-color: transparent">
-        <p style="background-color: transparent">
-            © @DateTime.Now.Year.ToString() <strong>XDS DATA</strong>. All rights reserved.
-            <a href="/privacy-policy" style="color: #007bff; text-decoration: none;">Privacy Policy</a> |
-            <a href="/terms-of-service" style="color: #007bff; text-decoration: none;">Terms of Service</a> |
-            <a href="/cookie-policy" style="color: #007bff; text-decoration: none;">Cookie Policy</a>
-        </p>
-    </MudPaper>
-</MudAppBar>
 @code {
     private CancellationTokenSource cancellationTokenSource;
     private MudBlazor.Severity AlertSeverity { get; set; } = MudBlazor.Severity.Success;
@@ -130,5 +142,4 @@
         {
         }
     }
-}
 }
