@@ -115,6 +115,10 @@
                             {
                                 <span class="cx-file-tag bad">Subscriber not recognised</span>
                             }
+                            @if (!string.IsNullOrEmpty(file.OwnershipLabel))
+                            {
+                                <span class="cx-file-tag @file.OwnershipTone">@file.OwnershipLabel</span>
+                            }
                             <button type="button" class="cx-icon-btn" aria-label="Remove @file.SpreadsheetFile.Name" @onclick="() => RemoveFile(file)">×</button>
                         </div>
                     }
@@ -141,7 +145,7 @@
 
             <div class="@cleaningView">
                 <div class="cx-actions cx-run-bar">
-                    <label class="cx-check"><input type="checkbox" @bind="CleanOnlyOrCleanAndReference" /> <span>Clean only</span></label>
+                    <label class="cx-check"><input type="checkbox" @bind="CleanOnlyOrCleanAndReference" @bind:after="RefreshOwnershipAsync" /> <span>Clean only</span></label>
                     <span class="cx-spacer"></span>
                     <button type="button" class="cx-btn cx-btn-ghost" @onclick="ClearSeletedFiles">Reload cleanser</button>
                     <button type="button" class="cx-btn cx-btn-primary" disabled="@_processing" aria-busy="@(_processing ? "true" : "false")" @onclick="() => RunCleanser(selectedItem.Id)">
@@ -985,10 +989,56 @@
         {
             ToggleCleaningViewOrRefView(1);
         }
+        await RefreshOwnershipAsync();
         StateHasChanged();
         currentFileCount = spreadsheetFileAndChipColor.Count;
         isLoading = false;
         Logger.LogInformation("File upload finished. {ValidFiles} valid files, {InvalidFiles} invalid files.", spreadsheetFileAndChipColor.Count(f => f.IsPassed), spreadsheetFileAndChipColor.Count(f => !f.IsPassed));
+    }
+    // Works out, for every file on the list, whether the signed-in person may clean it, using the same
+    // rules Run cleanser applies (Transact.ReceivedTrans owner, admin, or an admin-approved request), and
+    // shows the answer on the file row before anything is read or matched. Files that will be skipped are
+    // therefore visible up front. Display only: Run cleanser checks again when it runs.
+    async Task RefreshOwnershipAsync()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(authState.User);
+            var admin = user != null && await UserManager.IsInRoleAsync(user, "admin");
+            foreach (var item in spreadsheetFileAndChipColor)
+            {
+                var name = item.SpreadsheetFile?.Name ?? string.Empty;
+                var (found, assignedUserId) = await DataManagementService.GetFileAssignmentAsync(name);
+                if (!found)
+                {
+                    if (CleanOnlyOrCleanAndReference) { item.OwnershipLabel = "Not logged yet: free to clean"; item.OwnershipTone = "info"; }
+                    else { item.OwnershipLabel = "Not logged: will be skipped"; item.OwnershipTone = "bad"; }
+                    continue;
+                }
+                var basis = await DataManagementService.GetReCleanAccessBasisAsync(assignedUserId ?? string.Empty, user?.ReceivedTransUserID, admin, user?.Email, name);
+                if (basis != null)
+                {
+                    item.OwnershipLabel = basis switch { "Owner" => "You own this file", "Admin" => "Admin access", _ => "Access approved" };
+                    item.OwnershipTone = "ok";
+                }
+                else
+                {
+                    var owner = !string.IsNullOrWhiteSpace(assignedUserId)
+                        ? await DataManagementService.GetAssociateEmailForReceivedTransUserIdAsync(assignedUserId) ?? "another user"
+                        : "an unassigned user";
+                    item.OwnershipLabel = $"Assigned to {owner}: will be skipped";
+                    item.OwnershipTone = "bad";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // never block an upload because the ownership label could not be worked out
+            Logger.LogWarning(ex, "Could not work out file ownership labels");
+            foreach (var item in spreadsheetFileAndChipColor) { item.OwnershipLabel = string.Empty; }
+        }
+        await InvokeAsync(StateHasChanged);
     }
     void REF_RemoveFile(SpreadsheetFileAndChipColor file)
     {

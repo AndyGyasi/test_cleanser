@@ -429,3 +429,5 @@ html .cx-btn-danger:hover { background: var(--danger-bg); }
 .cx-filter-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-color: var(--accent); color: var(--text); font-weight: 500; }
 .cx-run-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; align-items: end; }
 .cx-run-filters .cx-select, .cx-run-filters .cx-input { max-width: none; width: 100%; }
+.cx-file-tag.info { background: var(--info-bg); color: var(--info); border-color: transparent; }
+.cx-file { flex-wrap: wrap; }
