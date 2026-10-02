@@ -8145,10 +8145,10 @@
             }
 
             // bc.DisburStatus comes from comparing against the reference table
-            // (REF_MainMatcherTransformerInd_Clean_BUS) -- same reasoning as the
-            // DOB check above: Clean Only means no reference involvement in the
-            // pass/fail decision at all, not just no database writes.
-            if (bc != null && bc.DisburStatus != null && bc.DisbursementDate != null && CleanOnlyOrCleanAndReference == false)
+            // (REF_MainMatcherTransformerInd_Clean_BUS). SOFT REFERENCE CHECK: applies to a "Clean only" run too.
+            // Clean only saves nothing to the reference, but a facility that is already on file with a different
+            // disbursement date is still failed (sent to UNL), as it is on a normal run.
+            if (bc != null && bc.DisburStatus != null && bc.DisbursementDate != null)
             {
                 if (bc.DisburStatus.Length > 6)
                 {
@@ -8828,10 +8828,10 @@
             //BMMATCHING
 
             // ic.DisburStatus comes from comparing against the reference table
-            // (REF_MainMatcherTransformerInd_Clean_IND) -- same reasoning as the
-            // DOB check above. Covers Individual (id 1) and Individual Mobile
-            // (id 7) both, since this branch is type- not tab-dispatched.
-            if (ic != null && ic.DisburStatus != null && ic.DisbursementDate != null && CleanOnlyOrCleanAndReference == false)
+            // (REF_MainMatcherTransformerInd_Clean_IND). SOFT REFERENCE CHECK, same as the date-of-birth check
+            // above: it applies to a "Clean only" run too (read-only; nothing is saved to the reference).
+            // Covers Individual (id 1) and Individual Mobile (id 7) both, since this branch is type- not tab-dispatched.
+            if (ic != null && ic.DisburStatus != null && ic.DisbursementDate != null)
             {
                 if (ic.DisburStatus.Length > 8)
                 {
