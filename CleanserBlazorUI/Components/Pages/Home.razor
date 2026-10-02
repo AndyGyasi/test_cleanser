@@ -8806,14 +8806,14 @@
                 ic.ReasonForWrittenOff.Data = string.Empty;
             }
             //RM
-            // ic.Status ("DOB") comes from the matcher (REF_MainMatcherTransformer_IND),
-            // which runs unconditionally because the NEW/MATCH/CORRECT DOB/DOBISSUES
-            // counts need it regardless of Clean Only. But actually FAILING the record
-            // over it is a reference comparison, same as the virtual-record check above
-            // -- and Clean Only means no reference involvement at all, not just no
-            // database writes. Applies to both Individual (id 1) and Individual Mobile
-            // (id 7): both are IndividualContext, so this one check covers both.
-            if (!string.IsNullOrWhiteSpace(ic.Status) && CleanOnlyOrCleanAndReference == false)
+            // ic.Status ("DOB") comes from the matcher (REF_MainMatcherTransformer_IND), which only sets it when
+            // the account number, customer and disbursement date are already on file and the date of birth
+            // differs from the saved one.
+            // SOFT REFERENCE CHECK: this flag applies to a "Clean only" run too -- the record is failed (sent to
+            // UNL) instead of being cleaned over a changed date of birth. It is read-only: Clean only still
+            // saves nothing to the reference and skips the wider cross-record check against history.
+            // Applies to both Individual (id 1) and Individual Mobile (id 7): both are IndividualContext.
+            if (!string.IsNullOrWhiteSpace(ic.Status))
             {
                 ic.DateOfBirth.Passed = false;
                 ic.DateOfBirth.Errors = new List<string>() { "DATE OF BIRTH DOES NOT MATCH PREVIOUS SUBMISSION" };
