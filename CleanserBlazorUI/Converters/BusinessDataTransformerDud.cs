@@ -198,7 +198,7 @@ public class BusinessDataTransformerDud
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        var b1 = date.TheDate.Year > DateTime.Now.Year;
+        var b1 = date.TheDate.Year > AppClock.Now.Year;
         var b11 = date.IsFutureDate;
         var b2 = date.TheDate.Year < 1900;
         var b22 = date.TheDate.Year > 1900;
@@ -217,7 +217,7 @@ public class BusinessDataTransformerDud
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        var b1 = date.TheDate.Year > DateTime.Now.Year;
+        var b1 = date.TheDate.Year > AppClock.Now.Year;
         var b11 = date.IsFutureDate;
         var b2 = date.TheDate.Year < 1900;
         var b22 = date.TheDate.Year > 1900;

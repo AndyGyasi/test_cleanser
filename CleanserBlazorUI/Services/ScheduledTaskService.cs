@@ -19,7 +19,7 @@ namespace CleanserBlazorUI.Services
         private void PerformScheduledTask(object? state)
         {
             // Add your scheduled task logic here
-            Console.WriteLine($"Scheduled task executed at: {DateTime.Now}");
+            Console.WriteLine($"Scheduled task executed at: {AppClock.Now}");
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

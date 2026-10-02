@@ -1928,7 +1928,7 @@ public class StringHelper
         // Try to parse the date string in yyyyMMdd format
         if (DateTime.TryParseExact(dateString, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDate))
         {
-            DateTime today = DateTime.Today;
+            DateTime today = AppClock.Today;
             DateTime eighteenYearsAgo = today.AddYears(-18);
 
             bool isEighteenOrAbove = parsedDate <= eighteenYearsAgo;

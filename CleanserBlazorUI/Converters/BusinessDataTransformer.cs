@@ -231,7 +231,7 @@ public class BusinessDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        var b1 = date.TheDate.Year > DateTime.Now.Year;
+        var b1 = date.TheDate.Year > AppClock.Now.Year;
         var b11 = date.IsFutureDate;
         var b2 = date.TheDate.Year < 1900;
         var b22 = date.TheDate.Year > 1900;
@@ -250,7 +250,7 @@ public class BusinessDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        var b1 = date.TheDate.Year > DateTime.Now.Year;
+        var b1 = date.TheDate.Year > AppClock.Now.Year;
         var b11 = date.IsFutureDate;
         var b2 = date.TheDate.Year < 1900;
         var b22 = date.TheDate.Year > 1900;
@@ -1430,7 +1430,7 @@ public class BusinessDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        if (date.IsEighteenOrAbove && date.IsValidFormat && DateTime.Now.Year - date.TheDate.Year <= 100)
+        if (date.IsEighteenOrAbove && date.IsValidFormat && AppClock.Now.Year - date.TheDate.Year <= 100)
         {
             cellData.Passed = true;
             cellData.Data = data;
@@ -1561,7 +1561,7 @@ public class BusinessDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        if (date.IsEighteenOrAbove && date.IsValidFormat && DateTime.Now.Year - date.TheDate.Year <= 100)
+        if (date.IsEighteenOrAbove && date.IsValidFormat && AppClock.Now.Year - date.TheDate.Year <= 100)
         {
             cellData.Passed = true;
             cellData.Data = data;
@@ -1754,7 +1754,7 @@ public class BusinessDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        if (date.IsEighteenOrAbove && date.IsValidFormat && DateTime.Now.Year - date.TheDate.Year <= 100)
+        if (date.IsEighteenOrAbove && date.IsValidFormat && AppClock.Now.Year - date.TheDate.Year <= 100)
         {
             cellData.Passed = true;
             cellData.Data = data;
@@ -1823,7 +1823,7 @@ public class BusinessDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        if (date.IsEighteenOrAbove && date.IsValidFormat && DateTime.Now.Year - date.TheDate.Year <= 100)
+        if (date.IsEighteenOrAbove && date.IsValidFormat && AppClock.Now.Year - date.TheDate.Year <= 100)
         {
             cellData.Passed = true;
             cellData.Data = data;

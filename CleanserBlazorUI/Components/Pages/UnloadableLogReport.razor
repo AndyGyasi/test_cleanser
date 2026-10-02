@@ -374,7 +374,7 @@ else
     async Task GenerateExcelAsync()
     {
         var bytes = CleanserBlazorUI.Services.UnloadableLogService.GenerateCombinedWorkbook(filteredRows);
-        await JS.InvokeVoidAsync("downloadFile", $"UnloadableLogReport_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", bytes,
+        await JS.InvokeVoidAsync("downloadFile", $"UnloadableLogReport_{AppClock.Now:yyyyMMdd_HHmm}.xlsx", bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 

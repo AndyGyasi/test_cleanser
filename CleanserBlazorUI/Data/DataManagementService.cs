@@ -158,7 +158,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         _context.ChangeTracker.Clear();
 
         var subscriber = await GetFileShortCodeFromFileName(fileShortName);
-        var now        = DateTime.Now;
+        var now        = AppClock.Now;
         var reportingPeriod = GetReportingPeriodLabel(fileShortName);
         var changelog  = new List<(string, string, string, string)>();
 
@@ -335,7 +335,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         _context.ChangeTracker.Clear();
 
         var subscriber = await GetFileShortCodeFromFileName(fileShortName);
-        var now        = DateTime.Now;
+        var now        = AppClock.Now;
         var reportingPeriod = GetReportingPeriodLabel(fileShortName);
         var changelog  = new List<(string, string, string, string)>();
 
@@ -476,7 +476,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         _context.ChangeTracker.Clear();
 
         var subscriber = await GetFileShortCodeFromFileName(fileShortName);
-        var now        = DateTime.Now;
+        var now        = AppClock.Now;
         var reportingPeriod = GetReportingPeriodLabel(fileShortName);
 
         var existing = await LoadReferenceRowsForKeysAsync(_context.BusinessesData, subscriber,
@@ -692,7 +692,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         {
             pending.IncomingDOB = incomingDob;
             pending.SourceFileName = fileShortName;
-            pending.DetectedDate = DateTime.Now;
+            pending.DetectedDate = AppClock.Now;
         }
         else
         {
@@ -706,7 +706,7 @@ WHERE t.SubscriberCode = {{0}} AND (
                 ExistingDOB = existingDob,
                 IncomingDOB = incomingDob,
                 SourceFileName = fileShortName,
-                DetectedDate = DateTime.Now
+                DetectedDate = AppClock.Now
             });
         }
         await _context.SaveChangesAsync();
@@ -975,7 +975,7 @@ WHERE t.SubscriberCode = {{0}} AND (
     {
         if (_item == null) return;
         var existingItem = await _context.BusinessClassNormalizer.FirstOrDefaultAsync(s => s.ShortValue == _item.ShortValue);
-        DateTime date = DateTime.Now;
+        DateTime date = AppClock.Now;
         if (existingItem == null)
         {
             _item.DateCreated = date;
@@ -1008,7 +1008,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         if (item == null) return;
         item.ShortValue = shortValue;
         item.LongValue = longValue;
-        item.DateModified = DateTime.Now;
+        item.DateModified = AppClock.Now;
         await _context.SaveChangesAsync();
     }
     public async Task<List<BusSettNormalizer>> BUS_NUM_GetAllSettingsAsync()
@@ -1069,7 +1069,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         {
             foreach (var item in businesssShortForms)
             {
-                var settingsClassNormal = new BusSettNormalizer() { ShortValue = item.Key, LongValue = item.Value,DateCreated = DateTime.Now, DateModified = DateTime.Now, DataType = SettingsDataType.BusinessNamenormalizer };
+                var settingsClassNormal = new BusSettNormalizer() { ShortValue = item.Key, LongValue = item.Value,DateCreated = AppClock.Now, DateModified = AppClock.Now, DataType = SettingsDataType.BusinessNamenormalizer };
                 BusinessNamesSettingsNormal.Add(settingsClassNormal);
             }
             await BUS_NUM_AddSettingsBulk(BusinessNamesSettingsNormal);
@@ -1090,7 +1090,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         {
             foreach (var item in businesssShortForms)
             {
-                var settingsClassNormal = new BusSettNormalizer() { ShortValue = item.Key, LongValue = item.Value, DateCreated = DateTime.Now, DateModified = DateTime.Now, DataType = SettingsDataType.BusinessNamenormalizer };
+                var settingsClassNormal = new BusSettNormalizer() { ShortValue = item.Key, LongValue = item.Value, DateCreated = AppClock.Now, DateModified = AppClock.Now, DataType = SettingsDataType.BusinessNamenormalizer };
                 BusinessNamesSettingsNormal.Add(settingsClassNormal);
             }
             await BUS_NUM_AddSettingsBulk(BusinessNamesSettingsNormal);
@@ -1160,7 +1160,7 @@ WHERE t.SubscriberCode = {{0}} AND (
             Months = header.Months,
             LogYear = header.LogYear,
             Comments = string.IsNullOrWhiteSpace(header.Comments) ? null : header.Comments,
-            CreatedDate = DateTime.Now
+            CreatedDate = AppClock.Now
         };
 
         foreach (var m in messageSummaries)
@@ -1327,7 +1327,7 @@ WHERE t.SubscriberCode = {{0}} AND (
     public async Task RecordUnloggedFileAttemptAsync(string filename, string attemptedByEmail)
     {
         var existing = await _context.DataLoggingUnloggedAttempts.FirstOrDefaultAsync(a => a.Filename == filename);
-        var now = DateTime.Now;
+        var now = AppClock.Now;
         var (dataProvider, subCode, subXDSCode, subCategoryCode) = await GetDataProviderInfoForFilenameAsync(filename);
 
         if (existing == null)
@@ -1672,7 +1672,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         List<(string Filename, string DataProvider, string? SubCode, string? SubXDSCode, string? SubCategoryCode, string AssignedToEmail)> files,
         string requestedByEmail, string reason)
     {
-        var now = DateTime.Now;
+        var now = AppClock.Now;
         foreach (var file in files)
         {
             _context.DataLoggingAccessRequests.Add(new DataLoggingAccessRequest
@@ -1714,7 +1714,7 @@ WHERE t.SubscriberCode = {{0}} AND (
 
         existing.Status = approve ? DataLoggingAccessRequestStatus.Approved : DataLoggingAccessRequestStatus.Denied;
         existing.ReviewedByEmail = reviewedByEmail;
-        existing.ReviewedDate = DateTime.Now;
+        existing.ReviewedDate = AppClock.Now;
         await _context.SaveChangesAsync();
     }
 
@@ -1775,7 +1775,7 @@ WHERE t.SubscriberCode = {{0}} AND (
             SubCategoryCode = subCategoryCode,
             PerformedByEmail = performedByEmail,
             Purpose = purpose,
-            PerformedDate = DateTime.Now
+            PerformedDate = AppClock.Now
         });
         await _context.SaveChangesAsync();
     }
@@ -1803,7 +1803,7 @@ WHERE t.SubscriberCode = {{0}} AND (
             SubXDSCode = subXDSCode,
             SubCategoryCode = subCategoryCode,
             PerformedByEmail = performedByEmail,
-            PerformedDate = DateTime.Now,
+            PerformedDate = AppClock.Now,
             FileInReceivedTrans = fileInReceivedTrans,
             AssignedToEmail = assignedToEmail,
             AccessBasis = accessBasis,
@@ -1905,7 +1905,7 @@ WHERE t.SubscriberCode = {{0}} AND (
             TopLevelCategory = topLevelCategory,
             SubCategory = subCategory,
             DescriptionOfErrors = descriptionOfErrors,
-            LastUpdatedDate = DateTime.Now
+            LastUpdatedDate = AppClock.Now
         });
         await _context.SaveChangesAsync();
     }
@@ -1918,7 +1918,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         existing.TopLevelCategory = topLevelCategory;
         existing.SubCategory = subCategory;
         existing.DescriptionOfErrors = descriptionOfErrors;
-        existing.LastUpdatedDate = DateTime.Now;
+        existing.LastUpdatedDate = AppClock.Now;
         await _context.SaveChangesAsync();
     }
 
@@ -2073,7 +2073,7 @@ WHERE t.SubscriberCode = {{0}} AND (
             // one the database returns first.
             var row = matches.Count > 0 ? PickCanonicalIndividualRef(matches) : null;
             applied = row != null;
-            if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
+            if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = AppClock.Now; }
         }
         else if (conflict.EntityType == "IndividualMobile")
         {
@@ -2083,7 +2083,7 @@ WHERE t.SubscriberCode = {{0}} AND (
                 .ToListAsync();
             var row = matches.Count > 0 ? PickCanonicalIndividualRef(matches) : null;
             applied = row != null;
-            if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
+            if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = AppClock.Now; }
         }
         else
         {
@@ -2093,10 +2093,10 @@ WHERE t.SubscriberCode = {{0}} AND (
                 .ToListAsync();
             var row = matches.Count > 0 ? PickCanonicalBusinessRef(matches) : null;
             applied = row != null;
-            if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = DateTime.Now; }
+            if (row != null) { row.DateOfBirth = correctedDob; row.LastUpdatedDate = AppClock.Now; }
         }
 
-        conflict.ResolvedDate = DateTime.Now;
+        conflict.ResolvedDate = AppClock.Now;
         conflict.ResolvedBy = resolvedBy;
         conflict.ResolutionNotes = notes;
         await _context.SaveChangesAsync();
@@ -2142,7 +2142,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         row.DateOfBirth = dob;
         row.NatIDNum = natId; row.VotersIDNum = votersId; row.DriverLicNum = driverLic;
         row.PassportNum = passport; row.SSNum = ssNum; row.EzwichNum = ezwich; row.OtherIDNum = otherId;
-        row.LastUpdatedDate = DateTime.Now;
+        row.LastUpdatedDate = AppClock.Now;
         await _context.SaveChangesAsync();
     }
 
@@ -2154,7 +2154,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         row.DateOfBirth = dob;
         row.NatIDNum = natId; row.VotersIDNum = votersId; row.DriverLicNum = driverLic;
         row.PassportNum = passport; row.SSNum = ssNum; row.EzwichNum = ezwich; row.OtherIDNum = otherId;
-        row.LastUpdatedDate = DateTime.Now;
+        row.LastUpdatedDate = AppClock.Now;
         await _context.SaveChangesAsync();
     }
 
@@ -2163,7 +2163,7 @@ WHERE t.SubscriberCode = {{0}} AND (
         var row = await _context.BusinessesData.FindAsync(id);
         if (row == null) return;
         row.Busregnum = busRegNum; row.Tinum = tinNum;
-        row.LastUpdatedDate = DateTime.Now;
+        row.LastUpdatedDate = AppClock.Now;
         await _context.SaveChangesAsync();
     }
 
@@ -2184,7 +2184,7 @@ WHERE t.SubscriberCode = {{0}} AND (
                 c.CreditFacilityAccNum == accNum && c.DisbursementDate == disbDate);
             if (pending != null)
             {
-                pending.ResolvedDate = DateTime.Now;
+                pending.ResolvedDate = AppClock.Now;
                 pending.ResolvedBy = "Bulk Import";
             }
         }
@@ -2213,7 +2213,7 @@ WHERE t.SubscriberCode = {{0}} AND (
                     if (!string.IsNullOrWhiteSpace(row.SSNum)) dbRow.SSNum = row.SSNum;
                     if (!string.IsNullOrWhiteSpace(row.EzwichNum)) dbRow.EzwichNum = row.EzwichNum;
                     if (!string.IsNullOrWhiteSpace(row.OtherIDNum)) dbRow.OtherIDNum = row.OtherIDNum;
-                    dbRow.LastUpdatedDate = DateTime.Now;
+                    dbRow.LastUpdatedDate = AppClock.Now;
 
                     await ResolveMatchingConflict("Individual", row.SubscriberCode, row.CustomerID, row.CreditFacilityAccNum, row.DisbursementDate);
                     result.Applied++;
@@ -2231,7 +2231,7 @@ WHERE t.SubscriberCode = {{0}} AND (
                     // the uploaded file (see Registrationdate/Commencementdate instead).
                     if (!string.IsNullOrWhiteSpace(row.Busregnum)) dbRow.Busregnum = row.Busregnum;
                     if (!string.IsNullOrWhiteSpace(row.Tinum)) dbRow.Tinum = row.Tinum;
-                    dbRow.LastUpdatedDate = DateTime.Now;
+                    dbRow.LastUpdatedDate = AppClock.Now;
 
                     await ResolveMatchingConflict("Business", row.SubscriberCode, row.CustomerID, row.CreditFacilityAccNum, row.DisbursementDate);
                     result.Applied++;
@@ -2253,7 +2253,7 @@ WHERE t.SubscriberCode = {{0}} AND (
                     if (!string.IsNullOrWhiteSpace(row.SSNum)) dbRow.SSNum = row.SSNum;
                     if (!string.IsNullOrWhiteSpace(row.EzwichNum)) dbRow.EzwichNum = row.EzwichNum;
                     if (!string.IsNullOrWhiteSpace(row.OtherIDNum)) dbRow.OtherIDNum = row.OtherIDNum;
-                    dbRow.LastUpdatedDate = DateTime.Now;
+                    dbRow.LastUpdatedDate = AppClock.Now;
 
                     await ResolveMatchingConflict("IndividualMobile", row.SubscriberCode, row.CustomerID, row.CreditFacilityAccNum, row.DisbursementDate);
                     result.Applied++;

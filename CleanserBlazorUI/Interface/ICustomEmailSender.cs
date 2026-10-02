@@ -109,7 +109,7 @@
 // //    <div class=""divider""></div>
 // //    <div class=""footer"">
 // //      <p>Need help? Contact <a href=""mailto:noreply.XDSmonitor@XDSdatagh.com"">noreply.XDSmonitor@XDSdatagh.com</a>.</p>
-// //      <p>&copy; {DateTime.Now.Year} XDS DATA GHANA. All rights reserved.</p>
+// //      <p>&copy; {AppClock.Now.Year} XDS DATA GHANA. All rights reserved.</p>
 // //    </div>
 // //  </div>
 // //</body>
@@ -260,7 +260,7 @@
 //     <div class=""divider""></div>
 //     <div class=""footer"">
 //       <p>Need help? Contact <a href=""mailto:noreply.XDSmonitor@XDSdatagh.com"">noreply.XDSmonitor@XDSdatagh.com</a>.</p>
-//       <p>&copy; {DateTime.Now.Year} XDS DATA GHANA. All rights reserved.</p>
+//       <p>&copy; {AppClock.Now.Year} XDS DATA GHANA. All rights reserved.</p>
 //     </div>
 //   </div>
 // </body>
@@ -410,7 +410,7 @@
 //     <div class=""divider""></div>
 //     <div class=""footer"">
 //       <p>Need help? Contact <a href=""mailto:noreply.XDSmonitor@XDSdatagh.com"">noreply.XDSmonitor@XDSdatagh.com</a>.</p>
-//       <p>&copy; {DateTime.Now.Year} XDS DATA GHANA. All rights reserved.</p>
+//       <p>&copy; {AppClock.Now.Year} XDS DATA GHANA. All rights reserved.</p>
 //     </div>
 //   </div>
 // </body>

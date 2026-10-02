@@ -1090,7 +1090,7 @@ public class IndividualDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        if (date.IsEighteenOrAbove && date.IsValidFormat && DateTime.Now.Year - date.TheDate.Year <= 100)
+        if (date.IsEighteenOrAbove && date.IsValidFormat && AppClock.Now.Year - date.TheDate.Year <= 100)
         {
             cellData.Passed = true;
             cellData.Data = data;
@@ -2570,7 +2570,7 @@ public class IndividualDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        if (date.IsEighteenOrAbove && date.IsValidFormat && DateTime.Now.Year - date.TheDate.Year <= 100)
+        if (date.IsEighteenOrAbove && date.IsValidFormat && AppClock.Now.Year - date.TheDate.Year <= 100)
         {
             cellData.Passed = true;
             cellData.Data = data;
@@ -2640,7 +2640,7 @@ public class IndividualDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        if (date.IsEighteenOrAbove && date.IsValidFormat && DateTime.Now.Year - date.TheDate.Year <= 100)
+        if (date.IsEighteenOrAbove && date.IsValidFormat && AppClock.Now.Year - date.TheDate.Year <= 100)
         {
             cellData.Passed = true;
             cellData.Data = data;
@@ -2710,7 +2710,7 @@ public class IndividualDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        if (date.IsEighteenOrAbove && date.IsValidFormat && DateTime.Now.Year - date.TheDate.Year <= 100)
+        if (date.IsEighteenOrAbove && date.IsValidFormat && AppClock.Now.Year - date.TheDate.Year <= 100)
         {
             cellData.Passed = true;
             cellData.Data = data;
@@ -2780,7 +2780,7 @@ public class IndividualDataTransformer
         var cellData = new CellDataAndStatus(data);
         data = stringHelper.RemoveSystemErroNames(data);
         var date = stringHelper.CheckDate(data);
-        if (date.IsEighteenOrAbove && date.IsValidFormat && DateTime.Now.Year - date.TheDate.Year <= 100)
+        if (date.IsEighteenOrAbove && date.IsValidFormat && AppClock.Now.Year - date.TheDate.Year <= 100)
         {
             cellData.Passed = true;
             cellData.Data = data;

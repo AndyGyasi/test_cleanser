@@ -245,7 +245,7 @@
         // Default to the current year so the grid isn't dumping every run
         // across every year on first load -- clear it via "Clear Filters"
         // to see everything.
-        selectedYear = DateTime.Now.Year.ToString();
+        selectedYear = AppClock.Now.Year.ToString();
         await ApplyFiltersAsync();
         // Dashboard defaults to "all years" (null) so it shows the full
         // picture on first view rather than just the current, likely-thin year.

@@ -24,7 +24,7 @@ public class FileCleanupService : BackgroundService
         {
             try
             {
-                var now = DateTime.Now;
+                var now = AppClock.Now;
                 // Check if current time is between 1 AM and 4 AM, and hasn't run today
                 if (now.Hour >= 1 && now.Hour < 4 && _lastRunDate.Date != now.Date)
                 {

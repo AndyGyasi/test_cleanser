@@ -238,7 +238,7 @@ public class SeedData
             ("Financial", "Written Off Facility", "WRITTENOFFAMOUNT AND AMTINARREARS SHOULD BE THE SAME FOR WRITTENOFFAMOUNT"),
         };
 
-        var now = DateTime.Now;
+        var now = AppClock.Now;
         context.UnloadableErrorCatalogEntries.AddRange(rows.Select(r => new UnloadableErrorCatalogEntry
         {
             TopLevelCategory = r.TopLevelCategory,

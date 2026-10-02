@@ -10010,13 +10010,13 @@
     {
         if (_processingStartedAt.HasValue)
         {
-            _elapsedTime = DateTime.Now - _processingStartedAt.Value;
+            _elapsedTime = AppClock.Now - _processingStartedAt.Value;
         }
         await InvokeAsync(StateHasChanged);
     }
     void StartTimer()
     {
-        _processingStartedAt = DateTime.Now;
+        _processingStartedAt = AppClock.Now;
         _elapsedTime = TimeSpan.Zero;
         _timer.Start();
         _isRunning = true;

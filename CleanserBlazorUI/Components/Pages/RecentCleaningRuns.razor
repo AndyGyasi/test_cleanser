@@ -388,7 +388,7 @@
             int sr = 1;
             sm.Cell(sr++, 1).Value = "Recent cleaning runs";
             sm.Cell(1, 1).Style.Font.Bold = true;
-            sm.Cell(sr, 1).Value = "Exported"; sm.Cell(sr++, 2).Value = DateTime.Now.ToString("dd MMM yyyy HH:mm");
+            sm.Cell(sr, 1).Value = "Exported"; sm.Cell(sr++, 2).Value = AppClock.Now.ToString("dd MMM yyyy HH:mm");
             sm.Cell(sr, 1).Value = "Runs shown"; sm.Cell(sr++, 2).Value = filtered.Count;
             sm.Cell(sr, 1).Value = "Type"; sm.Cell(sr++, 2).Value = kind;
             sm.Cell(sr, 1).Value = "Data provider"; sm.Cell(sr++, 2).Value = string.IsNullOrEmpty(provider) ? "All" : provider;
@@ -416,7 +416,7 @@
 
             using var ms = new MemoryStream();
             wb.SaveAs(ms);
-            await JS.InvokeVoidAsync("downloadFile", $"CleaningRuns_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", ms.ToArray(),
+            await JS.InvokeVoidAsync("downloadFile", $"CleaningRuns_{AppClock.Now:yyyyMMdd_HHmm}.xlsx", ms.ToArray(),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         }
         finally { exporting = false; }
